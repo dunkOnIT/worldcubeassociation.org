@@ -90,6 +90,19 @@ unless node.chef_environment.start_with?("development")
   end
 end
 
+unless node.chef_environment.start_with?("development")
+  cron "Send WEAT the draft for monthly digest" do
+    minute '0'
+    hour '0'
+    day '1'
+
+    path path
+    mailto admin_email
+    user username
+    command "(cd #{repo_root}/WcaOnRails; RACK_ENV=production bin/rake send_weat_digest_content:generate)"
+  end
+end
+
 # Run init-php-results on our first provisioning, but not on subsequent provisions.
 lockfile = '/tmp/php-results-initialized'
 init_php_commands.each do |cmd|
