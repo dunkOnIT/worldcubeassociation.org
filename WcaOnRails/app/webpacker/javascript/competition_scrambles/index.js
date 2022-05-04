@@ -11,7 +11,7 @@ import { getUrlParams, setUrlParams } from '../wca/utils';
 import { competitionApiUrl, competitionEventScramblesApiUrl } from '../requests/routes.js.erb';
 import I18n from '../i18n';
 
-const RoundScramblesTable = ({ round, eventName }) => {
+function RoundScramblesTable({ round, eventName }) {
   const scramblesByGroupId = Object.values(_.groupBy(round.scrambles, 'groupId'));
 
   return (
@@ -49,9 +49,9 @@ const RoundScramblesTable = ({ round, eventName }) => {
       </Table>
     </>
   );
-};
+}
 
-const EventScrambles = ({ competitionId, eventId }) => {
+function EventScrambles({ competitionId, eventId }) {
   const { loading, error, data } = useLoadedData(
     competitionEventScramblesApiUrl(competitionId, eventId),
   );
@@ -65,9 +65,9 @@ const EventScrambles = ({ competitionId, eventId }) => {
       ))}
     </div>
   );
-};
+}
 
-const CompetitionScrambles = ({ competitionId }) => {
+function CompetitionScrambles({ competitionId }) {
   const { loading, error, data } = useLoadedData(competitionApiUrl(competitionId));
   const [selectedEvent, setSelectedEvent] = useState(null);
   useEffect(() => {
@@ -111,5 +111,5 @@ const CompetitionScrambles = ({ competitionId }) => {
       />
     </div>
   );
-};
+}
 registerComponent(CompetitionScrambles, 'CompetitionScrambles');
