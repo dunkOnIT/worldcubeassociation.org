@@ -1,4 +1,4 @@
-# rozen_string_literal: true
+# frozen_string_literal: true
 
 class Competition < ApplicationRecord
   self.table_name = "Competitions"
@@ -606,6 +606,13 @@ class Competition < ApplicationRecord
   end
 
   after_create :create_delegate_report!
+  # after_save :update_delegate_report_discussion_link, if: :saved_change_to_name?
+  after_save :update_delegate_report_discussion_link
+  def update_delegate_report_discussion_link
+    Rails.logger.info("In competition after_save method")
+    delegate_report.set_discussion_url
+    delegate_report.save
+  end
 
   before_validation :unpack_dates
   validate :dates_must_be_valid

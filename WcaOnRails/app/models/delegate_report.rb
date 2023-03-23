@@ -12,7 +12,14 @@ class DelegateReport < ApplicationRecord
 
   before_create :set_discussion_url
   def set_discussion_url
-    self.discussion_url = "https://groups.google.com/a/worldcubeassociation.org/forum/#!topicsearchin/reports/" + URI.encode_www_form_component(competition.name)
+    Rails.logger.info("In delegate_report set_discussion_url method. Competition.name value: #{competition.name}")
+
+    # Creates a link to where the email discussion of the delegate report can be found in Google Groups
+    encoded_competition_name = URI.encode_www_form_component(competition.name)
+    Rails.logger.info("Previous discussion url: #{self.discussion_url}")
+    Rails.logger.info("Encoded competition name: #{encoded_competition_name}")
+    self.discussion_url = "\"https://groups.google.com/a/worldcubeassociation.org/forum/#!topicsearchin/reports/#{encoded_competition_name}\""
+    Rails.logger.info("New discussion url: #{self.discussion_url}")
   end
 
   before_create :equipment_default

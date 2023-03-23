@@ -13,16 +13,15 @@
     <% end %>
   <% end %>
 
-  <% if @delegate_report.posted? %>
-    <% if @delegate_report.discussion_url.present? %>
-      <%= alert :info do %>
-        View the discussion for this delegate report
-        <%= link_to "here", @delegate_report.discussion_url, target: "_blank" %>
-      <% end %>
-    <% else %>
-      <%= alert :warning do %>
-        This delegate report is missing a discussion url.
-      <% end %>
+  <% if @delegate_report.discussion_url.present? %>
+    <% Rails.logger.info("Rails discussion URL: #{@delegate_report.discussion_url}") %>
+    <%= alert :info do %>
+      View the discussion for this delegate report
+      <%= link_to "here", @delegate_report.discussion_url, target: "_blank" %>
+    <% end %>
+  <% else %>
+    <%= alert :warning do %>
+      This delegate report is missing a discussion url.
     <% end %>
   <% end %>
 
