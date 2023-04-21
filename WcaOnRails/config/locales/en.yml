@@ -2569,9 +2569,10 @@ en:
     legal_tnoodle_api_header: 'Legal TNoodle version'
   #context: text displayed on the merch page
   merch:
-    title: "WCA Merchandise"
+    title: 'WCA Merchandise'
     paragraphs:
-      '1':'The WCA has exclusive merchandise available to purchase! From T-Shirts, Hoodies, Stickers, Stackmats, Backpacks, and more! Our designs are constantly updated including the classic WCA logo, official World Championship merchandise, and World Record designs! You can buy our merchandise all over the world -- with direct stores in Europe, America and India and more to come soon!'
-      '2':'Buying WCA Merch through our stores is one of the best ways for you to support the WCA - a non-profit, volunteer run organization. We use all profits from the merchandise to further fund championships, equipment and other WCA related activities.'
+      - 'The WCA has exclusive merchandise available to purchase! From T-Shirts, Hoodies, Stickers, Stackmats, Backpacks, and more! Our designs are constantly updated including the classic WCA logo, official World Championship merchandise, and World Record designs.'
+      - 'Buying WCA Merch through our stores is one of the best ways for you to support the WCA - a non-profit, volunteer run organization. We use all profits from the merchandise to further fund championships, equipment and other WCA related activities.'
+      - 'You can buy our merchandise all over the world -- with direct stores in Europe, America and India and more to come soon!'
 
 

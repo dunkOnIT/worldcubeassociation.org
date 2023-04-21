@@ -5,7 +5,17 @@
     <%= t('merch.title') %>
   </h1>
 
-  <p>
-    <%= t('merch.paragraphs') %>
-  </p>
+  <% t('merch.paragraphs').each do |paragraph| %>
+    <p><%= paragraph %></p>
+  <% end %>
 
+  <ul id="merch-stores">
+    <li>
+      <%= link_to "Worldwide Store", "www.shop.worldcubeassociation.org" %>
+    </li>
+    <li>
+      <%= link_to "Indian Store", "india-shop.worldcubeassociation.org" %>
+    </li>
+  </ul>
+
+</div>
