@@ -395,6 +395,8 @@ GEM
       kaminari
       rails
     kgio (2.11.4)
+    knapsack_pro (5.7.0)
+      rake
     language_server-protocol (3.17.0.3)
     launchy (2.5.2)
       addressable (~> 2.8)
@@ -804,6 +806,7 @@ DEPENDENCIES
   json-schema
   kaminari
   kaminari-i18n
+  knapsack_pro
   launchy
   mail_form
   mini_magick
