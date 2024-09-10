@@ -63,10 +63,10 @@ class RegistrationsMailer < ApplicationMailer
                    reply_to: registration.competition.organizers_or_delegates.map(&:email)
   end
 
-  def notify_registrant_of_deleted_registration(registration)
+  def notify_registrant_of_cancelled_registration(registration)
     @registration = registration
     localized_mail @registration.user.locale,
-                   -> { I18n.t('registrations.mailer.deleted.mail_subject', comp_name: registration.competition.name) },
+                   -> { I18n.t('registrations.mailer.cancelled.mail_subject', comp_name: registration.competition.name) },
                    to: registration.user.email,
                    reply_to: registration.competition.organizers_or_delegates.map(&:email)
   end

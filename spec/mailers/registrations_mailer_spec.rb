@@ -16,7 +16,7 @@ RSpec.describe RegistrationsMailer, type: :mailer do
     let(:mail_new) { RegistrationsMailer.notify_registrant_of_new_registration(registration) }
     let(:mail_accepted) { RegistrationsMailer.notify_registrant_of_accepted_registration(registration) }
     let(:mail_pending) { RegistrationsMailer.notify_registrant_of_pending_registration(registration) }
-    let(:mail_deleted) { RegistrationsMailer.notify_registrant_of_deleted_registration(registration) }
+    let(:mail_cancelled) { RegistrationsMailer.notify_registrant_of_cancelled_registration(registration) }
 
     it "renders the headers in foreign locale" do
       # We expect the locale rendering the mail to be different from the registrant's
@@ -27,7 +27,7 @@ RSpec.describe RegistrationsMailer, type: :mailer do
       expect(mail_new.subject).to eq(I18n.t('registrations.mailer.new.mail_subject', comp_name: registration.competition.name, locale: :fr))
       expect(mail_accepted.subject).to eq(I18n.t('registrations.mailer.accepted.mail_subject', comp_name: registration.competition.name, locale: :fr))
       expect(mail_pending.subject).to eq(I18n.t('registrations.mailer.pending.mail_subject', comp_name: registration.competition.name, locale: :fr))
-      expect(mail_deleted.subject).to eq(I18n.t('registrations.mailer.deleted.mail_subject', comp_name: registration.competition.name, locale: :fr))
+      expect(mail_cancelled.subject).to eq(I18n.t('registrations.mailer.cancelled.mail_subject', comp_name: registration.competition.name, locale: :fr))
     end
 
     it "renders the body in foreign locale" do
@@ -42,7 +42,7 @@ RSpec.describe RegistrationsMailer, type: :mailer do
       expect(mail_new.body.encoded).to match(regards_in_french)
       expect(mail_accepted.body.encoded).to match(regards_in_french)
       expect(mail_pending.body.encoded).to match(regards_in_french)
-      expect(mail_deleted.body.encoded).to match(regards_in_french)
+      expect(mail_cancelled.body.encoded).to match(regards_in_french)
     end
   end
 
@@ -200,25 +200,25 @@ RSpec.describe RegistrationsMailer, type: :mailer do
     end
   end
 
-  describe "notify_registrant_of_deleted_registration for a competition without organizers" do
-    let(:mail) { RegistrationsMailer.notify_registrant_of_deleted_registration(registration) }
+  describe "notify_registrant_of_cancelled_registration for a competition without organizers" do
+    let(:mail) { RegistrationsMailer.notify_registrant_of_cancelled_registration(registration) }
     let(:registration) { FactoryBot.create(:registration, competition: competition_without_organizers) }
 
     it "renders the headers" do
-      expect(mail.subject).to eq("Registration Deleted: #{competition_without_organizers.name}")
+      expect(mail.subject).to eq("Registration Cancelled: #{competition_without_organizers.name}")
       expect(mail.to).to eq([registration.email])
       expect(mail.reply_to).to eq(competition_without_organizers.delegates.map(&:email))
       expect(mail.from).to eq(["notifications@worldcubeassociation.org"])
     end
 
     it "renders the body" do
-      expect(mail.body.encoded).to match("Your registration for .{1,200}#{registration.competition.name}.{1,200} has been deleted")
+      expect(mail.body.encoded).to match("Your registration for .{1,200}#{registration.competition.name}.{1,200} has been cancelled")
       expect(mail.body.encoded).to match("Regards, #{users_to_sentence(competition_without_organizers.organizers_or_delegates)}.")
     end
   end
 
-  describe "notify_registrant_of_deleted_registration for a competition with organizers" do
-    let(:mail) { RegistrationsMailer.notify_registrant_of_deleted_registration(registration) }
+  describe "notify_registrant_of_cancelled_registration for a competition with organizers" do
+    let(:mail) { RegistrationsMailer.notify_registrant_of_cancelled_registration(registration) }
     let(:registration) { FactoryBot.create(:registration, competition: competition_with_organizers) }
 
     it "renders the headers" do

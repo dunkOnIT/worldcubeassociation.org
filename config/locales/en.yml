@@ -1176,10 +1176,10 @@ en:
           withdrawal: "You asked for withdrawal"
         email_if_error: "If you think this is an error, please reply to this email."
       #context: when registration is deleted
-      deleted:
+      cancelled:
         #context: "comp_name" contains the competition's name
-        mail_subject: "Registration Deleted: %{comp_name}"
-        message_html: "Your registration for %{comp_name} has been deleted. Possible causes are:"
+        mail_subject: "Registration Cancelled: %{comp_name}"
+        message_html: "Your registration for %{comp_name} has been cancelled. Possible causes are:"
         #context: this key is one of the reasons explaining why a registration could be deleted
         causes:
           missing_info: "You did not submit all the required details"
