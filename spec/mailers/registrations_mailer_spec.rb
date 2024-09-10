@@ -77,9 +77,9 @@ RSpec.describe RegistrationsMailer, type: :mailer do
     end
   end
 
-  describe "notify_organizers_of_deleted_registration" do
+  describe "notify_organizers_of_cancelled_registration" do
     let(:registration) { FactoryBot.create(:registration, competition: competition_without_organizers) }
-    let(:mail) { RegistrationsMailer.notify_organizers_of_deleted_registration(registration) }
+    let(:mail) { RegistrationsMailer.notify_organizers_of_cancelled_registration(registration) }
 
     it "renders the headers" do
       competition_delegate1 = competition_without_organizers.competition_delegates.find_by_delegate_id(delegate1.id)
@@ -90,7 +90,7 @@ RSpec.describe RegistrationsMailer, type: :mailer do
       competition_delegate2.receive_registration_emails = true
       competition_delegate2.save!
 
-      expect(mail.subject).to eq("#{registration.name} just deleted their registration for #{registration.competition.name}")
+      expect(mail.subject).to eq("#{registration.name} just cancelled their registration for #{registration.competition.name}")
       expect(mail.to).to eq([delegate1.email, delegate2.email])
       expect(mail.reply_to).to eq(competition_without_organizers.managers.map(&:email))
       expect(mail.from).to eq(["notifications@worldcubeassociation.org"])
@@ -105,7 +105,7 @@ RSpec.describe RegistrationsMailer, type: :mailer do
       competition_delegate2.receive_registration_emails = true
       competition_delegate2.save!
 
-      expect(mail.body.encoded).to match("just deleted their registration for #{registration.competition.name}")
+      expect(mail.body.encoded).to match("just cancelled their registration for #{registration.competition.name}")
     end
   end
 
