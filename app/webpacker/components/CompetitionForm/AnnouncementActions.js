@@ -6,6 +6,7 @@ import {
   Segment,
 } from 'semantic-ui-react';
 import React, { useMemo } from 'react';
+import { DateTime } from 'luxon';
 import I18n from '../../lib/i18n';
 import { useStore } from '../../lib/providers/StoreProvider';
 import useLoadedData from '../../lib/hooks/useLoadedData';
@@ -18,6 +19,12 @@ import {
 import Loading from '../Requests/Loading';
 import ConfirmProvider, { useConfirm } from '../../lib/providers/ConfirmProvider';
 import useSaveAction from '../../lib/hooks/useSaveAction';
+import {
+  useFormContext,
+  useFormErrorHandler,
+  useFormInitialObject,
+} from '../wca/FormBuilder/provider/FormObjectProvider';
+import { useFormCommitAction, useFormUpdateAction } from '../wca/FormBuilder/EditForm';
 
 function AnnounceAction({
   competitionId,
@@ -33,21 +40,34 @@ function AnnounceAction({
   const { save } = useSaveAction();
   const confirm = useConfirm();
 
+  const updateFormObject = useFormUpdateAction();
+  const commitFormObject = useFormCommitAction();
+
   const postAnnouncement = () => {
     confirm({
       content: I18n.t('competitions.announce_confirm'),
     }).then(() => {
-      save(announceCompetitionUrl(competitionId), null, sync, {
+      save(announceCompetitionUrl(competitionId), null, () => {
+        sync();
+
+        updateFormObject('isVisible', true, ['admin']); // Automatically make the competition visible.
+        commitFormObject();
+      }, {
         body: null,
         method: 'PUT',
       });
     });
   };
 
+  const announcedAtLuxon = DateTime.fromISO(announcedAt);
+
   if (isAnnounced) {
     return (
       <List.Item>
-        {I18n.t('competitions.announced_by_html', { announcer_name: announcedBy, date_time: announcedAt })}
+        {I18n.t('competitions.announced_by_html', {
+          announcer_name: announcedBy,
+          date_time: announcedAtLuxon.toLocaleString(DateTime.DATETIME_FULL),
+        })}
       </List.Item>
     );
   }
@@ -127,13 +147,14 @@ function CloseRegistrationAction({
   competitionId,
   data,
   sync,
-  onError,
 }) {
   const {
     isRegistrationPast,
     isRegistrationFull,
     canCloseFullRegistration,
   } = data;
+
+  const onError = useFormErrorHandler();
 
   const { save } = useSaveAction();
   const confirm = useConfirm();
@@ -174,11 +195,11 @@ function CloseRegistrationAction({
   );
 }
 
-export default function AnnouncementActions({
-  onError,
-  disabled = false,
-}) {
-  const { isAdminView, initialCompetition: { competitionId } } = useStore();
+export default function AnnouncementActions() {
+  const { isAdminView } = useStore();
+
+  const { competitionId } = useFormInitialObject();
+  const { unsavedChanges: disabled } = useFormContext();
 
   const dataUrl = useMemo(() => competitionAnnouncementDataUrl(competitionId), [competitionId]);
 
@@ -205,7 +226,6 @@ export default function AnnouncementActions({
             competitionId={competitionId}
             data={data}
             sync={sync}
-            onError={onError}
           />
         </List>
       </Dimmer.Dimmable>

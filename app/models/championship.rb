@@ -5,12 +5,12 @@ class Championship < ApplicationRecord
   CHAMPIONSHIP_TYPE_WORLD = "world"
   MAJOR_CHAMPIONSHIP_TYPES = [
     CHAMPIONSHIP_TYPE_WORLD,
-    *Continent.real.map(&:id),
+    *Continent::REAL_CONTINENT_IDS,
   ].freeze
   CHAMPIONSHIP_TYPES = [
     *MAJOR_CHAMPIONSHIP_TYPES,
-    *Country.real.map(&:iso2),
-    *EligibleCountryIso2ForChampionship.championship_types,
+    *Country::WCA_COUNTRY_ISO_CODES,
+    *EligibleCountryIso2ForChampionship::CHAMPIONSHIP_TYPES,
   ].freeze
 
   belongs_to :competition
@@ -31,7 +31,7 @@ class Championship < ApplicationRecord
   end
 
   def country
-    Country.find_by_iso2(championship_type)
+    Country.find_by(iso2: championship_type)
   end
 
   def greater_china?
@@ -57,14 +57,5 @@ class Championship < ApplicationRecord
 
   def <=>(other)
     self.to_a <=> other.to_a
-  end
-
-  def self.grouped_championship_types
-    {
-      "planetary" => [CHAMPIONSHIP_TYPE_WORLD],
-      "continental" => Continent.all_sorted_by(I18n.locale, real: true).map(&:name),
-      "multi-national" => EligibleCountryIso2ForChampionship.championship_types,
-      "national" => Country.all_sorted_by(I18n.locale, real: true).map(&:iso2),
-    }
   end
 end

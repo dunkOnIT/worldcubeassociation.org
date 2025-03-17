@@ -1,6 +1,5 @@
 import React from 'react';
 import useLoadedData from './useLoadedData';
-import { groupTypes } from '../wca-data.js.erb';
 import { apiV0Urls } from '../requests/routes.js.erb';
 
 export default function useLoggedInUserPermissions() {
@@ -15,22 +14,8 @@ export default function useLoggedInUserPermissions() {
 
   const loggedInUserPermissions = React.useMemo(() => ({
     canViewDelegateAdminPage: Boolean(data?.can_view_delegate_admin_page.scope === '*'),
-    canEditRole: (role) => {
-      const roleGroupType = role.group.group_type;
-      const roleGroupId = role.group.id;
-
-      switch (roleGroupType) {
-        case groupTypes.delegate_regions:
-          return Boolean(data?.can_edit_groups.scope === '*' || data?.can_edit_groups.scope.some((groupId) => groupId === roleGroupId));
-        case groupTypes.teams_committees:
-          return Boolean(data?.can_edit_teams_committees.scope === '*' || data?.can_edit_teams_committees.scope.some((groupId) => groupId === roleGroupId));
-        case groupTypes.translators:
-          return Boolean(data?.can_edit_translators.scope === '*');
-        default:
-          return false;
-      }
-    },
-    canAccessWfcSeniorMatters: Boolean(data?.can_access_wfc_senior_matters.scope === '*'),
+    canEditGroup: (groupId) => Boolean(data?.can_edit_groups.scope === '*' || data?.can_edit_groups.scope.includes(groupId)),
+    canRequestToEditOthersProfile: Boolean(data?.can_request_to_edit_others_profile.scope === '*'),
   }), [data]);
 
   return { loggedInUserPermissions, loading };

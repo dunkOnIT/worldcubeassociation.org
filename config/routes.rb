@@ -19,17 +19,15 @@ Rails.application.routes.draw do
   end
 
   # Don't expose Paypal routes in production until we're reading to launch
-  unless Rails.env.production?
-    post 'registration/:id/create-paypal-order' => 'registrations#create_paypal_order', as: :registration_create_paypal_order
-    post 'registration/:id/capture-paypal-payment/:order_id' => 'registrations#capture_paypal_payment', as: :registration_capture_paypal_payment
-    get 'competitions/:id/paypal-return' => 'competitions#paypal_return', as: :competitions_paypal_return
-    post 'competitions/:id/disconnect_paypal' => 'competitions#disconnect_paypal', as: :competition_disconnect_paypal
+  unless PaypalInterface.paypal_disabled?
+    post 'registration/:id/capture-paypal-payment' => 'registrations#capture_paypal_payment', as: :registration_capture_paypal_payment
   end
 
   # Prevent account deletion, and overrides the sessions controller for 2FA.
   #  https://github.com/plataformatec/devise/wiki/How-To:-Disable-user-from-destroying-their-account
   devise_for :users, skip: :registrations, controllers: { sessions: "sessions" }
   devise_scope :user do
+    get 'staging_login', to: 'sessions#staging_oauth_login' unless EnvConfig.WCA_LIVE_SITE?
     resource :registration,
              only: [:new, :create],
              path: 'users',
@@ -42,11 +40,12 @@ Rails.application.routes.draw do
     post 'users/authenticate-sensitive' => 'users#authenticate_user_for_sensitive_edit'
     delete 'users/sign-out-other' => 'sessions#destroy_other', as: :destroy_other_user_sessions
   end
-  post 'registration/:id/refund/:payment_id' => 'registrations#refund_payment', as: :registration_payment_refund
-  post 'registration/:id/load-payment-intent' => 'registrations#load_payment_intent', as: :registration_payment_intent
-  get 'registration/:id/payment-completion' => 'registrations#payment_completion', as: :registration_payment_completion
+
+  post 'registration/:id/load-payment-intent/:payment_integration' => 'registrations#load_payment_intent', as: :registration_payment_intent
+  post 'competitions/:competition_id/refund/:payment_integration/:payment_id' => 'registrations#refund_payment', as: :registration_payment_refund
+  get 'competitions/:competition_id/payment-completion/:payment_integration' => 'registrations#payment_completion', as: :registration_payment_completion
   post 'registration/stripe-webhook' => 'registrations#stripe_webhook', as: :registration_stripe_webhook
-  get 'registration/stripe-denomination' => 'registrations#stripe_denomination', as: :registration_stripe_denomination
+  get 'registration/payment-denomination' => 'registrations#payment_denomination', as: :registration_payment_denomination
   resources :users, only: [:index, :edit, :update]
   get 'profile/edit' => 'users#edit'
   post 'profile/enable-2fa' => 'users#enable_2fa'
@@ -57,10 +56,12 @@ Rails.application.routes.draw do
   get 'profile/claim_wca_id' => 'users#claim_wca_id'
   get 'profile/claim_wca_id/select_nearby_delegate' => 'users#select_nearby_delegate'
 
-  get 'users/:id/edit/avatar_thumbnail' => 'users#edit_avatar_thumbnail', as: :users_avatar_thumbnail_edit
-  get 'users/:id/edit/pending_avatar_thumbnail' => 'users#edit_pending_avatar_thumbnail', as: :users_pending_avatar_thumbnail_edit
-  get 'admin/avatars' => 'admin/avatars#index'
-  post 'admin/avatars' => 'admin/avatars#update_all'
+  get 'users/:id/avatar' => 'users#avatar_data', as: :users_avatar_data
+  post 'users/:id/avatar' => 'users#upload_avatar'
+  patch 'users/:id/avatar' => 'users#update_avatar'
+  delete 'users/:id/avatar' => 'users#delete_avatar'
+  get 'admin/avatars/pending' => 'admin/avatars#pending_avatar_users', as: :pending_avatars
+  post 'admin/avatars' => 'admin/avatars#update_avatar', as: :admin_update_avatar
 
   get 'map' => 'competitions#embedable_map'
 
@@ -69,9 +70,7 @@ Rails.application.routes.draw do
   get 'competitions/:id/enable_v2' => "competitions#enable_v2", as: :enable_v2
   post 'competitions/bookmark' => 'competitions#bookmark', as: :bookmark
   post 'competitions/unbookmark' => 'competitions#unbookmark', as: :unbookmark
-
-  get 'competitions/v2/:id' => 'competitions_v2#show', as: :competitions_v2
-  get 'competitions/v2/:id/*all' => 'competitions_v2#show'
+  get 'competitions/registrations_v2/:competition_id/:user_id/edit' => 'registrations#edit', as: :edit_registration_v2
 
   resources :competitions do
     get 'edit/admin' => 'competitions#admin_edit', as: :admin_edit
@@ -112,7 +111,6 @@ Rails.application.routes.draw do
     # WRT views and action
     get '/admin/upload-results' => "admin#new_results", as: :admin_upload_results_edit
     get '/admin/check-existing-results' => "admin#check_competition_results", as: :admin_check_existing_results
-    post '/admin/check-existing-results' => "admin#do_check_competition_results", as: :admin_run_validators
     post '/admin/upload-json' => "admin#create_results", as: :admin_upload_results
     post '/admin/clear-submission' => "admin#clear_results_submission", as: :clear_results_submission
     get '/admin/import-results' => 'admin#import_results', as: :admin_import_results
@@ -121,21 +119,22 @@ Rails.application.routes.draw do
     delete '/admin/inbox-data' => 'admin#delete_inbox_data', as: :admin_delete_inbox_data
     delete '/admin/results-data' => 'admin#delete_results_data', as: :admin_delete_results_data
     get '/admin/results/:round_id/new' => 'admin/results#new', as: :new_result
+    get '/admin/scrambles/:round_id/new' => 'admin/scrambles#new', as: :new_scramble
+
+    get '/payment_integration/setup' => 'competitions#payment_integration_setup', as: :payment_integration_setup
+    get '/payment_integration/:payment_integration/connect' => 'competitions#connect_payment_integration', as: :connect_payment_integration
+    post '/payment_integration/:payment_integration/disconnect' => 'competitions#disconnect_payment_integration', as: :disconnect_payment_integration
   end
-  unless EnvConfig.WCA_LIVE_SITE?
-    scope :payment do
-      get '/config' => 'payment#payment_config'
-      get '/finish' => 'payment#payment_finish'
-      get '/refunds' => 'payment#available_refunds'
-      get '/refund' => 'payment#payment_refund'
-    end
+  scope :payment do
+    get '/refunds' => 'payment#available_refunds'
   end
 
   get 'competitions/:competition_id/report/edit' => 'delegate_reports#edit', as: :delegate_report_edit
   get 'competitions/:competition_id/report' => 'delegate_reports#show', as: :delegate_report
   patch 'competitions/:competition_id/report' => 'delegate_reports#update'
+  delete 'competitions/:competition_id/report/:image_id' => 'delegate_reports#delete_image', as: :delegate_report_delete_image
 
-  get 'competitions/:id/payment_setup' => 'competitions#payment_setup', as: :competitions_payment_setup
+  # Stripe needs this special redirect URL during OAuth, see the linked controller method for details
   get 'stripe-connect' => 'competitions#stripe_connect', as: :competitions_stripe_connect
   get 'competitions/:id/events/edit' => 'competitions#edit_events', as: :edit_events
   get 'competitions/:id/schedule/edit' => 'competitions#edit_schedule', as: :edit_schedule
@@ -149,6 +148,20 @@ Rails.application.routes.draw do
   get 'competitions/edit/registration-collisions-json' => 'competitions#registration_collisions_json', as: :registration_collisions_json
   get 'competitions/edit/series-eligible-competitions-json' => 'competitions#series_eligible_competitions_json', as: :series_eligible_competitions_json
 
+  if WcaLive.enabled?
+    get 'competitions/:competition_id/live/competitors/:registration_id' => 'live#by_person', as: :live_person_results
+    get 'competitions/:competition_id/live/podiums' => 'live#podiums', as: :live_podiums
+    get 'competitions/:competition_id/live/competitors' => 'live#competitors', as: :live_competitors
+    get 'competitions/:competition_id/live/rounds/:round_id/admin' => 'live#admin', as: :live_admin_round_results
+    get 'competitions/:competition_id/live/rounds/:round_id/admin/check' => 'live#double_check', as: :live_admin_check_round_results
+    get 'competitions/:competition_id/live/admin' => 'live#schedule_admin', as: :live_schedule_admin
+    get 'competitions/:competition_id/live/rounds/:round_id' => 'live#round_results', as: :live_round_results
+
+    get 'api/competitions/:competition_id/rounds/:round_id' => 'live#round_results_api', as: :live_round_results_api
+    post 'api/competitions/:competition_id/rounds/:round_id' => 'live#add_result', as: :add_live_result
+    patch 'api/competitions/:competition_id/rounds/:round_id' => 'live#update_result', as: :update_live_result
+  end
+
   get 'results/rankings', to: redirect('results/rankings/333/single', status: 302)
   get 'results/rankings/333mbf/average',
       to: redirect(status: 302) { |params, request| URI.parse(request.original_url).query ? "results/rankings/333mbf/single?#{URI.parse(request.original_url).query}" : "results/rankings/333mbf/single" }
@@ -158,7 +171,7 @@ Rails.application.routes.draw do
 
   scope '/admin' do
     resources :results, except: [:index, :new], controller: 'admin/results'
-    post 'results' => 'admin/results#create'
+    resources :scrambles, except: [:index, :new], controller: 'admin/scrambles'
     get 'events_data/:competition_id' => 'admin/results#show_events_data', as: :competition_events_data
   end
 
@@ -181,23 +194,38 @@ Rails.application.routes.draw do
   get 'polls/:id/vote' => 'votes#vote', as: 'polls_vote'
   get 'polls/:id/results' => 'polls#results', as: 'polls_results'
 
-  resources :teams, only: [:index, :update, :edit]
-
   resources :votes, only: [:create, :update]
 
   post 'competitions/:id/post_results' => 'competitions#post_results', as: :competition_post_results
-  post 'competitions/:id/disconnect_stripe' => 'competitions#disconnect_stripe', as: :competition_disconnect_stripe
 
-  get 'panel' => 'panel#index'
-  get 'panel/delegate-crash-course', to: redirect('https://documents.worldcubeassociation.org/edudoc/delegate-crash-course/delegate_crash_course.pdf', status: 302)
   get 'panel/pending-claims(/:user_id)' => 'panel#pending_claims_for_subordinate_delegates', as: 'pending_claims'
   scope 'panel' do
-    get 'wfc' => 'panel#wfc', as: :panel_wfc
-    get 'wrt' => 'panel#wrt', as: :panel_wrt
-    get 'wst' => 'panel#wst', as: :panel_wst
-    get 'board' => 'panel#board', as: :panel_board
-    get 'leader' => 'panel#leader', as: :panel_leader
-    get 'senior_delegate' => 'panel#senior_delegate', as: :panel_senior_delegate
+    get 'staff' => 'panel#staff', as: :panel_staff
+    get 'generate_db_token' => 'panel#generate_db_token', as: :panel_generate_db_token
+    get 'competition_count' => 'panel#competition_count', as: :panel_competition_count
+    get 'validators_for_competition_list' => 'panel#validators_for_competition_list', as: :panel_validators_for_competition_list
+    get 'validators_for_competitions_in_range' => 'panel#validators_for_competitions_in_range', as: :panel_validators_for_competitions_in_range
+    get 'cronjob_details' => 'panel#cronjob_details', as: :panel_cronjob_details
+    post 'cronjob_run' => 'panel#cronjob_run', as: :panel_cronjob_run
+    post 'cronjob_reset' => 'panel#cronjob_reset', as: :panel_cronjob_reset
+  end
+  get 'panel/:panel_id' => 'panel#index', as: :panel_index
+  scope 'panel-page' do
+    get 'check-records' => 'admin#check_regional_records', as: :admin_check_regional_records
+    get 'fix-results' => 'admin#fix_results', as: :admin_fix_results
+    get 'merge-profiles' => 'admin#merge_people', as: :admin_merge_people
+    get 'reassign-connected-wca-id' => 'admin#reassign_wca_id', as: :admin_reassign_wca_id
+  end
+  get 'panel-page/:id' => 'panel#panel_page', as: :panel_page
+  scope 'tickets' do
+    get 'details_before_anonymization' => 'tickets#details_before_anonymization', as: :tickets_details_before_anonymization
+    post 'anonymize' => 'tickets#anonymize', as: :tickets_anonymize
+  end
+  resources :tickets, only: [:index, :show] do
+    post 'update_status' => 'tickets#update_status', as: :update_status
+    get 'edit_person_validators' => 'tickets#edit_person_validators', as: :edit_person_validators
+    resources :ticket_comments, only: [:index, :create], as: :comments
+    resources :ticket_logs, only: [:index], as: :logs
   end
   resources :notifications, only: [:index]
 
@@ -208,6 +236,8 @@ Rails.application.routes.draw do
   post 'upload/image', to: 'upload#image'
 
   get 'robots' => 'static_pages#robots'
+
+  get 'help/api' => 'static_pages#api_help'
 
   get 'server-status' => 'server_status#index'
 
@@ -229,10 +259,8 @@ Rails.application.routes.draw do
   get 'privacy' => 'static_pages#privacy'
   get 'score-tools' => 'static_pages#score_tools'
   get 'speedcubing-history' => 'static_pages#speedcubing_history'
-  get 'teams-committees' => 'static_pages#teams_committees'
+  get 'teams-committees-councils' => 'static_pages#teams_committees_councils'
   get 'tutorial' => redirect('/education', status: 302)
-  get 'wca-workbook-assistant' => 'static_pages#wca_workbook_assistant'
-  get 'wca-workbook-assistant-versions' => 'static_pages#wca_workbook_assistant_versions'
   get 'translators' => 'static_pages#translators'
   get 'officers-and-board' => 'static_pages#officers_and_board'
 
@@ -240,19 +268,25 @@ Rails.application.routes.draw do
   get 'organizations' => 'regional_organizations#index'
   get 'admin/regional-organizations' => 'regional_organizations#admin'
 
-  get 'disciplinary' => 'wdc#root'
+  get 'disciplinary' => 'wic#root'
 
   get 'contact' => 'contacts#index'
-  post 'contact' => 'contacts#website_create'
-  get 'contact/dob' => 'contacts#dob'
-  post 'contact/dob' => 'contacts#dob_create'
+  post 'contact' => 'contacts#contact'
+  scope 'contact' do
+    get 'edit_profile' => 'contacts#edit_profile'
+    post 'edit_profile' => 'contacts#edit_profile_action', as: :contact_edit_profile_action
+    get 'dob' => 'contacts#dob', as: :contact_dob
+    post 'dob' => 'contacts#dob_create'
+  end
 
   get '/regulations' => 'regulations#show', id: 'index'
   get '/regulations/wca-regulations-and-guidelines', to: redirect('https://regulations.worldcubeassociation.org/wca-regulations-and-guidelines.pdf', status: 302)
+  get '/regulations/full/wca-regulations-and-guidelines.merged', to: redirect('https://regulations.worldcubeassociation.org/wca-regulations-and-guidelines.merged.pdf', status: 302)
   get '/regulations/about' => 'regulations#about'
   get '/regulations/countries' => 'regulations#countries'
   get '/regulations/scrambles' => 'regulations#scrambles'
   get '/regulations/guidelines' => 'regulations#guidelines'
+  get '/regulations/full' => 'regulations#full'
   get '/regulations/translations' => 'regulations#translations'
   get '/regulations/translations/:language' => 'regulations_translations#translated_regulation'
   get '/regulations/translations/:language/guidelines' => 'regulations_translations#translated_guidelines'
@@ -262,38 +296,20 @@ Rails.application.routes.draw do
   get '/regulations/history/official/:id/guidelines' => 'regulations#historical_guidelines'
   get '/regulations/history/official/:id/wca-regulations-and-guidelines', to: redirect('https://regulations.worldcubeassociation.org/history/official/%{id}/wca-regulations-and-guidelines.pdf', status: 302)
 
-  get '/admin' => 'admin#index'
   get '/admin/all-voters' => 'admin#all_voters', as: :eligible_voters
   get '/admin/leader-senior-voters' => 'admin#leader_senior_voters', as: :leader_senior_voters
-  get '/admin/check_results' => 'admin#check_results'
-  get '/admin/validation_competitions' => "admin#compute_validation_competitions"
-  post '/admin/check_results' => 'admin#do_check_results'
-  get '/admin/merge_people' => 'admin#merge_people'
-  post '/admin/merge_people' => 'admin#do_merge_people'
-  get '/admin/edit_person' => 'admin#edit_person'
-  get '/admin/fix_results' => 'admin#fix_results'
+  post '/admin/merge_people' => 'admin#do_merge_people', as: :admin_do_merge_people
   get '/admin/fix_results_selector' => 'admin#fix_results_selector', as: :admin_fix_results_ajax
   get '/admin/person_data' => 'admin#person_data'
-  get '/admin/compute_auxiliary_data' => 'admin#compute_auxiliary_data'
   get '/admin/do_compute_auxiliary_data' => 'admin#do_compute_auxiliary_data'
-  get '/admin/generate_exports' => 'admin#generate_exports'
   get '/admin/generate_db_token' => 'admin#generate_db_token'
-  get '/admin/do_generate_dev_export' => 'admin#do_generate_dev_export'
-  get '/admin/do_generate_public_export' => 'admin#do_generate_public_export'
-  get '/admin/check_regional_records' => 'admin#check_regional_records'
   get '/admin/override_regional_records' => 'admin#override_regional_records'
   post '/admin/override_regional_records' => 'admin#do_override_regional_records'
-  get '/admin/finish_persons' => 'admin#finish_persons'
-  post '/admin/finish_persons' => 'admin#do_finish_persons'
-  get '/admin/finish_unfinished_persons' => 'admin#finish_unfinished_persons'
   get '/admin/complete_persons' => 'admin#complete_persons'
   post '/admin/complete_persons' => 'admin#do_complete_persons'
   get '/admin/peek_unfinished_results' => 'admin#peek_unfinished_results'
-  get '/admin/anonymize_person' => 'admin#anonymize_person'
-  post '/admin/anonymize_person' => 'admin#do_anonymize_person'
-  get '/admin/reassign_wca_id' => 'admin#reassign_wca_id'
-  get '/admin/validate_reassign_wca_id' => 'admin#validate_reassign_wca_id'
-  post '/admin/reassign_wca_id' => 'admin#do_reassign_wca_id'
+  get '/admin/validate_reassign_wca_id' => 'admin#validate_reassign_wca_id', as: :admin_validate_reassign_wca_id
+  post '/admin/reassign_wca_id' => 'admin#do_reassign_wca_id', as: :admin_do_reassign_wca_id
 
   get '/search' => 'search_results#index'
 
@@ -328,17 +344,36 @@ Rails.application.routes.draw do
   end
 
   namespace :api do
-    get '/', to: redirect('/api/v0', status: 302)
+    get '/', to: redirect('/help/api', status: 302)
     namespace :internal do
       namespace :v1 do
         get '/users/:id/permissions' => 'permissions#index'
+        get '/competitions/:competition_id' => 'competitions#show'
+        get '/competitions/:competition_id/qualifications' => 'competitions#qualifications'
         post '/users/competitor-info' => 'users#competitor_info'
-        post '/payment/init_stripe' => 'payment#init'
+        post '/mailers/registration' => 'mailers#registration'
+        post '/payment/init_stripe' => 'payment#init_stripe'
       end
     end
+
+    # While this is the start of a v1 API, this is currently not usable by outside developers as
+    # getting a JWT token requires you to be logged in through the Website
+    namespace :v1 do
+      namespace :registrations do
+        get '/register', to: 'registrations#show'
+        post '/register', to: 'registrations#create'
+        patch '/register', to: 'registrations#update'
+        patch '/bulk_update', to: 'registrations#bulk_update'
+        get '/:competition_id', to: 'registrations#list'
+        get '/:competition_id/admin', to: 'registrations#list_admin', as: :list_admin
+        get '/:competition_id/payment', to: 'registrations#payment_ticket', as: :payment_ticket
+      end
+    end
+
     namespace :v0 do
-      get '/' => 'api#help'
+      get '/', to: redirect('/help/api', status: 302)
       get '/me' => 'api#me'
+      get '/healthcheck' => 'api#healthcheck'
       get '/auth/results' => 'api#auth_results'
       get '/export/public' => 'api#export_public'
       get '/scramble-program' => 'api#scramble_program'
@@ -350,28 +385,37 @@ Rails.application.routes.draw do
       get '/search/regulations' => 'api#regulations_search'
       get '/search/incidents' => 'api#incidents_search'
       get '/users' => 'users#show_users_by_id'
+      post '/users' => 'users#show_users_by_id'
       get '/users/me' => 'users#show_me'
       get '/users/me/personal_records' => 'users#personal_records'
       get '/users/me/preferred_events' => 'users#preferred_events'
       get '/users/me/permissions' => 'users#permissions'
       get '/users/me/bookmarks' => 'users#bookmarked_competitions'
-      get '/users/me/token' => 'users#token'
+      get '/users/me/token' => 'users#token', as: :token
       get '/users/:id' => 'users#show_user_by_id', constraints: { id: /\d+/ }
       get '/users/:wca_id' => 'users#show_user_by_wca_id', as: :user
       get '/delegates' => 'api#delegates'
+      get '/delegates/search-index' => 'api#delegates_search_index', as: :delegates_search_index
       get '/persons' => "persons#index"
       get '/persons/:wca_id' => "persons#show", as: :person
       get '/persons/:wca_id/results' => "persons#results", as: :person_results
       get '/persons/:wca_id/competitions' => "persons#competitions", as: :person_competitions
-      get '/geocoding/search' => 'geocoding#get_location_from_query', as: :geocoding_search
+      get '/persons/:wca_id/personal_records' => "persons#personal_records", as: :personal_records
+      get '/geocoding/search' => 'geocoding#location_from_query', as: :geocoding_search
+      get '/geocoding/time_zone' => 'geocoding#time_zone_from_coordinates', as: :geocoding_time_zone
       get '/countries' => 'api#countries'
+      get '/records' => "api#records"
+      get '/results/:user_id/qualification_data' => 'api#user_qualification_data', as: :user_qualification_data
       get '/competition_series/:id' => 'api#competition_series'
+      get '/competition_index' => 'competitions#competition_index', as: :competition_index
+
       resources :competitions, only: [:index, :show] do
         get '/wcif' => 'competitions#show_wcif'
         get '/wcif/public' => 'competitions#show_wcif_public'
         get '/results' => 'competitions#results', as: :results
         get '/results/:event_id' => 'competitions#event_results', as: :event_results
         get '/competitors' => 'competitions#competitors'
+        get '/qualifications' => 'competitions#qualifications'
         get '/registrations' => 'competitions#registrations'
         get '/schedule' => 'competitions#schedule'
         get '/scrambles' => 'competitions#scrambles', as: :scrambles
@@ -379,15 +423,13 @@ Rails.application.routes.draw do
         get '/psych-sheet/:event_id' => 'competitions#event_psych_sheet', as: :event_psych_sheet
         patch '/wcif' => 'competitions#update_wcif', as: :update_wcif
       end
-      get '/records' => "api#records"
+
+      post '/registration-data' => 'competitions#registration_data', as: :registration_data
 
       scope 'user_roles' do
-        get '/user/:user_id' => 'user_roles#index_for_user', as: :index_for_user
-        get '/group/:group_id' => 'user_roles#index_for_group', as: :index_for_group
-        get '/group-type/:group_type' => 'user_roles#index_for_group_type', as: :index_for_group_type
         get '/search' => 'user_roles#search', as: :user_roles_search
       end
-      resources :user_roles, only: [:create, :show, :update, :destroy]
+      resources :user_roles, only: [:index, :show, :create, :update, :destroy]
       resources :user_groups, only: [:index, :create, :update]
       namespace :wrt do
         resources :persons, only: [:update, :destroy] do
@@ -395,9 +437,14 @@ Rails.application.routes.draw do
         end
       end
       namespace :wfc do
-        resources :xero_users, only: [:index, :create]
+        resources :xero_users, only: [:index, :create, :update]
         resources :dues_redirects, only: [:index, :create, :destroy]
       end
     end
   end
+
+  # Deprecated Links
+  get 'teams-committees' => redirect('teams-committees-councils')
+  get 'panel/delegate-crash-course' => redirect('panel/delegate#delegate-handbook')
+  get 'panel' => redirect('panel/staff')
 end

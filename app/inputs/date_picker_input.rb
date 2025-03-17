@@ -6,7 +6,7 @@ class DatePickerInput < SimpleForm::Inputs::StringInput
     set_value_html_option
 
     template.content_tag :div, class: 'input-group date datetimepicker' do
-      input = super(wrapper_options) # leave StringInput do the real rendering
+      input = super # leave StringInput do the real rendering
       input + utc_addon
     end
   end
@@ -58,8 +58,8 @@ class DatePickerInput < SimpleForm::Inputs::StringInput
     end
 
     def set_value_html_option
-      return unless value.present?
-      input_html_options[:value] ||= value.is_a?(String) ? value : I18n.localize(value, format: self.class.display_pattern)
+      return if value.blank?
+      input_html_options[:value] ||= value.is_a?(String) ? value : I18n.l(value, format: self.class.display_pattern)
     end
 
     def value

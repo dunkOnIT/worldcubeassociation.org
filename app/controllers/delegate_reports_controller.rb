@@ -51,6 +51,8 @@ class DelegateReportsController < ApplicationController
         if @competition.end_date >= DelegateReport::REPORTS_ENABLED_DATE
           CompetitionsMailer.notify_of_delegate_report_submission(@competition).deliver_later
           CompetitionsMailer.wrc_delegate_report_followup(@competition).deliver_later
+          SendWrcReportNotification.perform_later(@competition)
+
           flash[:info] = "Your report has been posted and emailed!"
         else
           flash[:info] = "Your report has been posted but not emailed because it is for a pre June 2016 competition."
@@ -64,30 +66,33 @@ class DelegateReportsController < ApplicationController
     end
   end
 
+  def delete_image
+    image = ActiveStorage::Attachment.find(params[:image_id])
+    image.purge
+
+    flash[:success] = "Image deleted successfully."
+
+    redirect_to delegate_report_edit_path(competition_from_params)
+  end
+
   private def delegate_report_params
     params.require(:delegate_report).permit(
       :discussion_url,
       :schedule_url,
-      :equipment,
-      :venue,
-      :organization,
-      :incidents,
       :remarks,
       :posted,
       :wrc_feedback_requested,
       :wrc_incidents,
-      :wdc_feedback_requested,
-      :wdc_incidents,
+      :wic_feedback_requested,
+      :wic_incidents,
+      *DelegateReport::AVAILABLE_SECTIONS,
+      setup_images: [],
     )
   end
 
   private def assign_wrc_users(delegate_report)
-    # TODO(https://github.com/thewca/worldcubeassociation.org/issues/4535):
-    # We're reloading here as a workaround. This should be handled in a more
-    # general way.
-    Team.wrc.reload
-    wrc_primary_team_member, wrc_secondary_team_member = Team.wrc.current_members.sample 2
-    delegate_report.wrc_primary_user = wrc_primary_team_member.user
-    delegate_report.wrc_secondary_user = wrc_secondary_team_member.user
+    wrc_primary_user, wrc_secondary_user = UserGroup.teams_committees_group_wrc.active_users.sample 2
+    delegate_report.wrc_primary_user = wrc_primary_user
+    delegate_report.wrc_secondary_user = wrc_secondary_user
   end
 end

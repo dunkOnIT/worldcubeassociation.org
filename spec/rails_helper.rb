@@ -12,6 +12,8 @@ require "capybara/rspec"
 require 'capybara-screenshot/rspec'
 require 'capybara/apparition'
 
+require 'active_record/testing/query_assertions'
+
 # Requires supporting ruby files with custom matchers and macros, etc, in
 # spec/support/ and its subdirectories. Files matching `spec/**/*_spec.rb` are
 # run as spec files by default. This means that files in spec/support that end
@@ -25,7 +27,7 @@ require 'capybara/apparition'
 # directory. Alternatively, in the individual `*_spec.rb` files, manually
 # require only the support files necessary.
 #
-Dir[Rails.root.join('spec/support/**/*.rb')].each { |f| require f }
+Rails.root.glob('spec/support/**/*.rb').each { |f| require f }
 
 # Checks for pending migrations before tests are run.
 # If you are not using ActiveRecord, you can remove this line.
@@ -42,7 +44,6 @@ Capybara.register_driver :apparition do |app|
 end
 
 Capybara.javascript_driver = :apparition
-Capybara.server = :webrick
 
 RSpec.configure do |config|
   # enforce consistent locale behaviour across OSes, especially Linux
@@ -87,6 +88,7 @@ RSpec.configure do |config|
   config.include ApplicationHelper
 
   config.include ActiveJob::TestHelper
+  config.include ActiveRecord::Assertions::QueryAssertions, type: :model
 
   if EnvConfig.DISABLE_WEBMOCK?
     WebMock.disable!

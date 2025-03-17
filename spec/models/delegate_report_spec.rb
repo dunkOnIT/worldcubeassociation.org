@@ -19,7 +19,7 @@ RSpec.describe DelegateReport do
   end
 
   it "schedule_url is required when posted" do
-    dr = FactoryBot.build :delegate_report, schedule_url: nil
+    dr = FactoryBot.build :delegate_report, :with_images, schedule_url: nil
     expect(dr).to be_valid
 
     dr.posted = true
@@ -31,12 +31,12 @@ RSpec.describe DelegateReport do
 
   it "discussion_url is set on creation" do
     dr = FactoryBot.create :delegate_report
-    expect(dr.discussion_url).to eq "https://groups.google.com/a/worldcubeassociation.org/forum/#!topicsearchin/reports/" + URI.encode_www_form_component(dr.competition.name)
+    expect(dr.discussion_url).to eq "https://groups.google.com/a/worldcubeassociation.org/forum/#!topicsearchin/reports/#{URI.encode_www_form_component(dr.competition.name)}"
   end
 
   it "wrc_feedback_requested is set false on creation" do
     dr = FactoryBot.create :delegate_report
-    expect(dr.wrc_feedback_requested).to eq false
+    expect(dr.wrc_feedback_requested).to be false
   end
 
   it "wrc_incidents is required when wrc_feedback_requested is true" do
@@ -50,19 +50,19 @@ RSpec.describe DelegateReport do
     expect(dr).to be_valid
   end
 
-  it "wdc_feedback_requested is set false on creation" do
+  it "wic_feedback_requested is set false on creation" do
     dr = FactoryBot.create :delegate_report
-    expect(dr.wdc_feedback_requested).to eq false
+    expect(dr.wic_feedback_requested).to be false
   end
 
-  it "wdc_incidents is required when wdc_feedback_requested is true" do
+  it "wic_incidents is required when wic_feedback_requested is true" do
     dr = FactoryBot.build :delegate_report
     expect(dr).to be_valid
 
-    dr.wdc_feedback_requested = true
-    expect(dr).to be_invalid_with_errors wdc_incidents: ["can't be blank"]
+    dr.wic_feedback_requested = true
+    expect(dr).to be_invalid_with_errors wic_incidents: ["can't be blank"]
 
-    dr.wdc_incidents = "4, 5, 6"
+    dr.wic_incidents = "4, 5, 6"
     expect(dr).to be_valid
   end
 
@@ -75,21 +75,22 @@ RSpec.describe DelegateReport do
       let(:delegate) { competition.delegates.first }
 
       it "cannot view delegate report with unposted report" do
-        expect(other_delegate.can_view_delegate_report?(competition.delegate_report)).to eq false
+        expect(other_delegate.can_view_delegate_report?(competition.delegate_report)).to be false
       end
 
       it "can view delegate report with posted report" do
-        competition.delegate_report.update!(schedule_url: "http://example.com", posted: true)
+        posted_dummy_dr = FactoryBot.create :delegate_report, :posted, competition: competition
+        competition.delegate_report.update!(schedule_url: "http://example.com", posted: true, setup_images: posted_dummy_dr.setup_images_blobs)
 
-        expect(other_delegate.can_view_delegate_report?(competition.delegate_report)).to eq true
+        expect(other_delegate.can_view_delegate_report?(competition.delegate_report)).to be true
       end
 
       it "can view own delegate report for unposted report" do
-        expect(delegate.can_view_delegate_report?(competition.delegate_report)).to eq true
+        expect(delegate.can_view_delegate_report?(competition.delegate_report)).to be true
       end
 
       it "board member can view delegate report for unposted report" do
-        expect(board_member.can_view_delegate_report?(competition.delegate_report)).to eq true
+        expect(board_member.can_view_delegate_report?(competition.delegate_report)).to be true
       end
     end
 
@@ -98,15 +99,15 @@ RSpec.describe DelegateReport do
       let(:delegate) { competition.delegates.first }
 
       it "cannot view delegate report with unposted report" do
-        expect(other_delegate.can_view_delegate_report?(competition.delegate_report)).to eq false
+        expect(other_delegate.can_view_delegate_report?(competition.delegate_report)).to be false
       end
 
       it "can view own delegate report for unposted report" do
-        expect(delegate.can_view_delegate_report?(competition.delegate_report)).to eq true
+        expect(delegate.can_view_delegate_report?(competition.delegate_report)).to be true
       end
 
       it "board member can view delegate report for unposted report" do
-        expect(board_member.can_view_delegate_report?(competition.delegate_report)).to eq true
+        expect(board_member.can_view_delegate_report?(competition.delegate_report)).to be true
       end
     end
   end

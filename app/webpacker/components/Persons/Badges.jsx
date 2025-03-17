@@ -3,7 +3,11 @@ import { Popup } from 'semantic-ui-react';
 import useLoadedData from '../../lib/hooks/useLoadedData';
 import I18n from '../../lib/i18n';
 import {
-  apiV0Urls, delegatesPageUrl, teamsCommitteesPageUrl, translatorsPageUrl,
+  apiV0Urls,
+  delegatesPageUrl,
+  teamsCommitteesCouncilsPageUrl,
+  translatorsPageUrl,
+  officersAndBoardPageUrl,
 } from '../../lib/requests/routes.js.erb';
 import { groupTypes } from '../../lib/wca-data.js.erb';
 
@@ -21,15 +25,15 @@ function badgeParams(role) {
       roleTitle: `${role.group.metadata.friendly_id.toUpperCase()} ${I18n.t(`enums.user_roles.status.${role.group.group_type}.${role.metadata.status}`)}`,
       groupTitle: role.group.name,
       badgeClass: `team-${role.metadata.status.replace('_', '-')}-badge`,
-      url: teamsCommitteesPageUrl,
+      url: teamsCommitteesCouncilsPageUrl(role.group.metadata.friendly_id),
     };
   }
   if (role.group.group_type === groupTypes.board) {
     return {
-      roleTitle: role.group.metadata.friendly_id.toUpperCase(),
+      roleTitle: role.group.group_type.toUpperCase(),
       groupTitle: I18n.t(`user_groups.group_types.${role.group.group_type}`),
       badgeClass: 'team-member-badge',
-      url: teamsCommitteesPageUrl,
+      url: officersAndBoardPageUrl,
     };
   }
   if (role.group.group_type === groupTypes.officers) {
@@ -37,7 +41,7 @@ function badgeParams(role) {
       roleTitle: `${I18n.t(`enums.user_roles.status.${role.group.group_type}.${role.metadata.status}`)}`,
       groupTitle: I18n.t(`user_groups.group_types.${role.group.group_type}`),
       badgeClass: 'officer-badge',
-      url: teamsCommitteesPageUrl,
+      url: officersAndBoardPageUrl,
     };
   }
   if (role.group.group_type === groupTypes.translators) {
@@ -52,13 +56,13 @@ function badgeParams(role) {
 }
 
 export default function Badges({ userId }) {
-  const { data } = useLoadedData(apiV0Urls.userRoles.listOfUser(
-    userId,
-    ['lead', 'eligibleVoter', 'groupTypeRank', 'status', 'groupName'].join(','), // Sort params
+  const { data } = useLoadedData(apiV0Urls.userRoles.list(
     {
+      userId,
       isActive: true,
       isGroupHidden: false,
     },
+    ['lead', 'eligibleVoter', 'groupTypeRank', 'status:desc', 'groupName'].join(','), // Sort params
   ));
   const roles = data || [];
 

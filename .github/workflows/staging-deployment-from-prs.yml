@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Trigger deployment on comment
         id: trigger-deployment
-        uses: shanegenschaw/pull-request-comment-trigger@v2.1.0
+        uses: shanegenschaw/pull-request-comment-trigger@v3.0.0
         with:
           trigger: '@thewca-bot deploy staging'
           reaction: rocket
@@ -40,28 +40,21 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
         if: steps.trigger-deployment.outputs.triggered == 'true'
-      - name: Build Sidekiq if triggered
+      - name: Get the SHA of the current branch/fork
+        shell: bash
+        run: |
+          echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+      - name: Build staging images
         if: steps.trigger-deployment.outputs.triggered == 'true'
-        uses: docker/build-push-action@v5
+        uses: ./.github/actions/build-environment
         with:
-          push: true
-          file: ./Dockerfile.sidekiq
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/wca-on-rails:sidekiq-staging
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Build Rails if triggered
-        if: steps.trigger-deployment.outputs.triggered == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/wca-on-rails:staging
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            BUILD_TAG=${{ github.sha }}
+          environment: staging
+          build_tag: ${{ env.SHORT_SHA }}
+          registry: ${{ steps.login-ecr.outputs.registry }}/wca-on-rails
       - name: Deploy staging if triggered
         if: steps.trigger-deployment.outputs.triggered == 'true'
         run: |
           aws ecs update-service --cluster wca-on-rails --service wca-on-rails-staging --force-new-deployment
+          aws ecs update-service --cluster wca-on-rails --service wca-on-rails-staging-sqs-worker --force-new-deployment
+          aws ecs update-service --cluster wca-on-rails --service wca-on-rails-staging-API --force-new-deployment
+          aws ecs update-service --cluster wca-on-rails --service wca-on-rails-staging-auxiliary-services --force-new-deployment

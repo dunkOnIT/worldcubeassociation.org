@@ -42,7 +42,7 @@ class CompetitionSeries < ApplicationRecord
         self.wcif_id = safe_name_without_year[0...(MAX_ID_LENGTH - year.length)] + year
       end
       if short_name.blank?
-        year = " " + year
+        year = " #{year}"
         self.short_name = name_without_year.truncate(MAX_SHORT_NAME_LENGTH - year.length) + year
       end
     end
@@ -69,8 +69,8 @@ class CompetitionSeries < ApplicationRecord
   def serializable_hash(options = nil)
     options = DEFAULT_SERIALIZE_OPTIONS.merge(options || {})
     include_competitions = options[:include]&.delete("competitions")
-    json = super(options)
-    json.merge!(id: wcif_id)
+    json = super
+    json[:id] = wcif_id
     if include_competitions
       json[:competitions] = competitions.ids
     end

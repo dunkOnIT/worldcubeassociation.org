@@ -51,10 +51,17 @@ RSpec.describe Registration do
       expect(registration).to be_invalid_with_errors(user_id: ["Need a birthdate"])
     end
 
-    it "requires user not banned" do
+    it "user cant register if banned when competitor starts" do
       user = FactoryBot.create(:user, :banned)
       registration.user = user
       expect(registration).to be_invalid_with_errors(user_id: [I18n.t('registrations.errors.banned_html').html_safe])
+    end
+
+    it 'user can register if ban ends before competition start' do
+      user = FactoryBot.create(:user, :briefly_banned)
+      registration.user = user
+      registration.validate
+      expect(registration.errors[:user_id]).not_to include(I18n.t('registrations.errors.banned_html').html_safe)
     end
   end
 
@@ -68,22 +75,32 @@ RSpec.describe Registration do
     user = FactoryBot.create(:user, :banned)
     registration.user = user
     registration.save!
-    registration.deleted_at = Time.now
+    registration.competing_status = Registrations::Helper::STATUS_CANCELLED
     expect(registration).to be_valid
   end
 
   it "doesn't allow undeleting a registration of a banned competitor" do
     user = FactoryBot.create(:user, :banned)
     registration.user = user
-    registration.deleted_at = Time.now
+    registration.competing_status = Registrations::Helper::STATUS_CANCELLED
     registration.save!
-    registration.deleted_at = nil
+    registration.competing_status = Registrations::Helper::STATUS_ACCEPTED
     expect(registration).to be_invalid_with_errors(user_id: [I18n.t('registrations.errors.undelete_banned')])
+  end
+
+  it "allows undeleting a banned competitor if ban ends before comp starts" do
+    user = FactoryBot.create(:user, :briefly_banned)
+    registration.user = user
+    registration.competing_status = Registrations::Helper::STATUS_CANCELLED
+    registration.save!
+    registration.competing_status = Registrations::Helper::STATUS_ACCEPTED
+    registration.validate
+    expect(registration.errors[:user_id]).not_to include(I18n.t('registrations.errors.undelete_banned'))
   end
 
   it "requires at least one event" do
     registration.registration_competition_events = []
-    expect(registration).to be_invalid_with_errors(registration_competition_events: ["must register for at least one event"])
+    expect(registration).to be_invalid_with_errors(registration_competition_events: [I18n.t('registrations.errors.must_register')])
   end
 
   it "allows zero events for non competing staff" do
@@ -163,7 +180,7 @@ RSpec.describe Registration do
 
       it "blocks registrations when zero events are selected" do
         registration = FactoryBot.build(:registration, competition: competition, events: [])
-        expect(registration).to be_invalid_with_errors(registration_competition_events: ["must register for at least one event"])
+        expect(registration).to be_invalid_with_errors(registration_competition_events: [I18n.t('registrations.errors.must_register')])
       end
 
       it "allows registration when just one is event selected" do
@@ -183,7 +200,7 @@ RSpec.describe Registration do
 
       it "blocks registration when number of events selected is greater than limit" do
         registration = FactoryBot.build(:registration, competition: competition, events: competition.events)
-        expect(registration).to be_invalid_with_errors(registration_competition_events: ["you must register in less than or equal to #{event_limit} events"])
+        expect(registration).to be_invalid_with_errors(registration_competition_events: [I18n.t('registrations.errors.exceeds_event_limit', count: event_limit)])
       end
     end
 
@@ -192,7 +209,7 @@ RSpec.describe Registration do
 
       it "blocks registrations when zero events are selected" do
         registration = FactoryBot.build(:registration, competition: competition, events: [])
-        expect(registration).to be_invalid_with_errors(registration_competition_events: ["must register for at least one event"])
+        expect(registration).to be_invalid_with_errors(registration_competition_events: [I18n.t('registrations.errors.must_register')])
       end
 
       it "allows registration when all events are selected" do
@@ -216,7 +233,7 @@ RSpec.describe Registration do
     end
 
     context "and one registration is accepted" do
-      before { registration.update!(accepted_at: Time.now) }
+      before { registration.update!(competing_status: Registrations::Helper::STATUS_ACCEPTED) }
 
       it "does allow accepting when the other registration is pending" do
         expect(registration).to be_valid
@@ -226,14 +243,14 @@ RSpec.describe Registration do
       it "does allow accepting when the other registration is deleted" do
         expect(registration).to be_valid
 
-        partner_registration.deleted_at = Time.now
+        partner_registration.competing_status = Registrations::Helper::STATUS_CANCELLED
         expect(partner_registration).to be_valid
       end
 
       it "doesn't allow accepting when the other registration is confirmed" do
         expect(registration).to be_valid
 
-        partner_registration.accepted_at = Time.now
+        partner_registration.competing_status = Registrations::Helper::STATUS_ACCEPTED
         expect(partner_registration).to be_invalid_with_errors(competition_id: [I18n.t('registrations.errors.series_more_than_one_accepted')])
       end
     end
@@ -330,5 +347,310 @@ RSpec.describe Registration do
 
       expect(described_class.accepted_and_paid_pending_count).to eq(total_count)
     end
+  end
+
+  describe '#to_wcif' do
+    it 'deleted state returns deleted status' do
+      registration = FactoryBot.create(:registration, :cancelled)
+
+      expect(registration.cancelled?).to be(true)
+      expect(registration.to_wcif['status']).to eq('deleted')
+    end
+
+    it 'rejected state returns deleted status' do
+      registration = FactoryBot.create(:registration, :rejected)
+
+      expect(registration.rejected?).to be(true)
+      expect(registration.to_wcif['status']).to eq('deleted')
+    end
+
+    it 'accepted state returns accepted status' do
+      registration = FactoryBot.create(:registration, :accepted)
+
+      expect(registration.accepted?).to be(true)
+      expect(registration.to_wcif['status']).to eq('accepted')
+    end
+
+    it 'pending state returns pending status' do
+      registration = FactoryBot.create(:registration, :pending)
+
+      expect(registration.pending?).to be(true)
+      expect(registration.to_wcif['status']).to eq('pending')
+    end
+
+    it 'waitlisted state returns pending status' do
+      registration = FactoryBot.create(:registration, :waiting_list)
+
+      expect(registration.waitlisted?).to be(true)
+      expect(registration.to_wcif['status']).to eq('pending')
+    end
+  end
+
+  describe '#process_update' do
+    it 'updates multiple properties simultaneously' do
+      registration.update_lanes!(
+        {
+          user_id: registration.user.id, guests: 3, competing: {
+            admin_comment: 'updated admin comment', comment: 'user comment', status: 'accepted', event_ids: ['333', '555']
+          }
+        }.with_indifferent_access,
+        registration.user,
+      )
+
+      registration.reload
+      expect(registration.comments).to eq('user comment')
+      expect(registration.administrative_notes).to eq('updated admin comment')
+      expect(registration.guests).to eq(3)
+      expect(registration.competing_status).to eq('accepted')
+      expect(registration.event_ids).to eq(['333', '555'])
+    end
+
+    describe 'update statuses' do
+      competing_status_updates = [
+        { initial_status: Registrations::Helper::STATUS_PENDING, input_status: Registrations::Helper::STATUS_ACCEPTED },
+        { initial_status: Registrations::Helper::STATUS_PENDING, input_status: Registrations::Helper::STATUS_CANCELLED },
+        { initial_status: Registrations::Helper::STATUS_PENDING, input_status: Registrations::Helper::STATUS_WAITING_LIST },
+        { initial_status: Registrations::Helper::STATUS_PENDING, input_status: Registrations::Helper::STATUS_PENDING },
+        { initial_status: Registrations::Helper::STATUS_PENDING, input_status: Registrations::Helper::STATUS_REJECTED },
+        { initial_status: Registrations::Helper::STATUS_ACCEPTED, input_status: Registrations::Helper::STATUS_CANCELLED },
+        { initial_status: Registrations::Helper::STATUS_ACCEPTED, input_status: Registrations::Helper::STATUS_PENDING },
+        { initial_status: Registrations::Helper::STATUS_ACCEPTED, input_status: Registrations::Helper::STATUS_WAITING_LIST },
+        { initial_status: Registrations::Helper::STATUS_ACCEPTED, input_status: Registrations::Helper::STATUS_ACCEPTED },
+        { initial_status: Registrations::Helper::STATUS_ACCEPTED, input_status: Registrations::Helper::STATUS_REJECTED },
+        { initial_status: Registrations::Helper::STATUS_WAITING_LIST, input_status: Registrations::Helper::STATUS_CANCELLED },
+        { initial_status: Registrations::Helper::STATUS_WAITING_LIST, input_status: Registrations::Helper::STATUS_PENDING },
+        { initial_status: Registrations::Helper::STATUS_WAITING_LIST, input_status: Registrations::Helper::STATUS_WAITING_LIST },
+        { initial_status: Registrations::Helper::STATUS_WAITING_LIST, input_status: Registrations::Helper::STATUS_ACCEPTED },
+        { initial_status: Registrations::Helper::STATUS_WAITING_LIST, input_status: Registrations::Helper::STATUS_REJECTED },
+        { initial_status: Registrations::Helper::STATUS_CANCELLED, input_status: Registrations::Helper::STATUS_CANCELLED },
+        { initial_status: Registrations::Helper::STATUS_CANCELLED, input_status: Registrations::Helper::STATUS_PENDING },
+        { initial_status: Registrations::Helper::STATUS_CANCELLED, input_status: Registrations::Helper::STATUS_WAITING_LIST },
+        { initial_status: Registrations::Helper::STATUS_CANCELLED, input_status: Registrations::Helper::STATUS_ACCEPTED },
+        { initial_status: Registrations::Helper::STATUS_CANCELLED, input_status: Registrations::Helper::STATUS_REJECTED },
+        { initial_status: Registrations::Helper::STATUS_REJECTED, input_status: Registrations::Helper::STATUS_CANCELLED },
+        { initial_status: Registrations::Helper::STATUS_REJECTED, input_status: Registrations::Helper::STATUS_PENDING },
+        { initial_status: Registrations::Helper::STATUS_REJECTED, input_status: Registrations::Helper::STATUS_WAITING_LIST },
+        { initial_status: Registrations::Helper::STATUS_REJECTED, input_status: Registrations::Helper::STATUS_ACCEPTED },
+        { initial_status: Registrations::Helper::STATUS_REJECTED, input_status: Registrations::Helper::STATUS_REJECTED },
+      ]
+
+      it 'tests cover all possible status update combinations' do
+        combined_updates = (competing_status_updates).flatten
+        expect(combined_updates).to match_array(REGISTRATION_TRANSITIONS)
+      end
+
+      RSpec.shared_examples 'update competing status' do |initial_status, input_status|
+        it "given #{input_status}, #{initial_status} updates as expected" do
+          registration = FactoryBot.create(:registration, initial_status.to_sym)
+          registration.update_lanes!({ user_id: registration.user.id, competing: { status: input_status } }.with_indifferent_access, registration.user)
+          registration.reload
+          expect(registration.competing_status).to eq(input_status)
+        end
+      end
+
+      RSpec.shared_examples 'update competing status: deleted cases' do |initial_status, input_status|
+        it "given #{input_status}, #{initial_status} updates as expected" do
+          registration = FactoryBot.create(:registration, input_status.to_sym)
+          registration.update_lanes!({ user_id: registration.user.id, competing: { status: input_status } }.with_indifferent_access, registration.user)
+          expect(registration.competing_status).to eq(Registrations::Helper::STATUS_CANCELLED)
+        end
+      end
+
+      competing_status_updates.each do |params|
+        it_behaves_like 'update competing status', params[:initial_status], params[:input_status]
+      end
+    end
+
+    it 'updates guests' do
+      registration.update_lanes!({ user_id: registration.user.id, guests: 5 }, registration.user)
+      registration.reload
+      expect(registration.guests).to eq(5)
+    end
+
+    # TODO: Should we change "comments" db field to "competing_comments"?
+    it 'updates competing comment' do
+      registration.update_lanes!({ user_id: registration.user.id, competing: { comment: 'test comment' } }.with_indifferent_access, registration.user)
+      registration.reload
+      expect(registration.comments).to eq('test comment')
+    end
+
+    it 'updates admin comment' do
+      registration.update_lanes!({ user_id: registration.user.id, competing: { admin_comment: 'test admin comment' } }.with_indifferent_access, registration.user)
+      registration.reload
+      expect(registration.administrative_notes).to eq('test admin comment')
+    end
+
+    it 'removes events' do
+      registration.update_lanes!({ user_id: registration.user.id, competing: { event_ids: ['333'] } }.with_indifferent_access, registration.user)
+      registration.reload
+      expect(registration.event_ids).to eq(['333'])
+    end
+
+    it 'adds events' do
+      registration.update_lanes!({ user_id: registration.user.id, competing: { event_ids: ['333', '444', '555'] } }.with_indifferent_access, registration.user)
+      registration.reload
+      expect(registration.event_ids).to eq(['333', '444', '555'])
+    end
+
+    describe 'update waiting list position' do
+      let(:competition) { FactoryBot.create(:competition, :registration_open, :editable_registrations, :with_organizer) }
+      let(:waiting_list) { competition.waiting_list }
+
+      let!(:reg1) { FactoryBot.create(:registration, :waiting_list, competition: competition) }
+      let!(:reg2) { FactoryBot.create(:registration, :waiting_list, competition: competition) }
+      let!(:reg3) { FactoryBot.create(:registration, :waiting_list, competition: competition) }
+      let!(:reg4) { FactoryBot.create(:registration, :waiting_list, competition: competition) }
+      let!(:reg5) { FactoryBot.create(:registration, :waiting_list, competition: competition) }
+
+      it 'adds to waiting list' do
+        reg = FactoryBot.create(:registration, competition: competition)
+        reg.update_lanes!({ user_id: reg.user.id, competing: { status: 'waiting_list' } }.with_indifferent_access, reg.user)
+
+        expect(reg.waiting_list_position).to eq(6)
+      end
+
+      it 'no change if we try to add a registration on the waiting list' do
+        reg1.update_lanes!({ user_id: reg1.user.id, competing: { status: 'waiting_list' } }.with_indifferent_access, reg1.user)
+
+        expect(reg1.waiting_list_position).to eq(1)
+        expect(reg2.waiting_list_position).to eq(2)
+        expect(reg3.waiting_list_position).to eq(3)
+        expect(reg4.waiting_list_position).to eq(4)
+        expect(reg5.waiting_list_position).to eq(5)
+
+        expect(waiting_list.entries.count).to eq(5)
+      end
+
+      it 'removes from waiting list' do
+        reg4.update_lanes!({ user_id: reg4.user.id, competing: { status: 'pending' } }.with_indifferent_access, reg4.user)
+
+        expect(reg4.waiting_list_position).to be(nil)
+        expect(waiting_list.entries.count).to eq(4)
+      end
+
+      it 'moves backwards in waiting list' do
+        reg2.update_lanes!({ user_id: reg2.user.id, competing: { waiting_list_position: 5 } }.with_indifferent_access, reg2.user)
+
+        expect(reg1.waiting_list_position).to eq(1)
+        expect(reg2.waiting_list_position).to eq(5)
+        expect(reg3.waiting_list_position).to eq(2)
+        expect(reg4.waiting_list_position).to eq(3)
+        expect(reg5.waiting_list_position).to eq(4)
+
+        expect(waiting_list.entries.count).to eq(5)
+      end
+
+      it 'moves forwards in waiting list' do
+        reg5.update_lanes!({ user_id: reg5.user.id, competing: { waiting_list_position: 1 } }.with_indifferent_access, reg5.user)
+
+        expect(reg1.waiting_list_position).to eq(2)
+        expect(reg2.waiting_list_position).to eq(3)
+        expect(reg3.waiting_list_position).to eq(4)
+        expect(reg4.waiting_list_position).to eq(5)
+        expect(reg5.waiting_list_position).to eq(1)
+
+        expect(waiting_list.entries.count).to eq(5)
+      end
+
+      it 'moves to the same position' do
+        reg5.update_lanes!({ user_id: reg5.user.id, competing: { waiting_list_position: 5 } }.with_indifferent_access, reg5.user)
+
+        expect(reg1.waiting_list_position).to eq(1)
+        expect(reg2.waiting_list_position).to eq(2)
+        expect(reg3.waiting_list_position).to eq(3)
+        expect(reg4.waiting_list_position).to eq(4)
+        expect(reg5.waiting_list_position).to eq(5)
+
+        expect(waiting_list.entries.count).to eq(5)
+      end
+
+      it 'move request for a registration that isnt in the waiting list' do
+        reg = FactoryBot.create(:registration, competition: competition)
+        reg.update_lanes!({ user_id: reg.user.id, competing: { waiting_list_position: 3 } }.with_indifferent_access, reg.user)
+
+        expect(reg.waiting_list_position).to be(nil)
+
+        expect(reg1.waiting_list_position).to eq(1)
+        expect(reg2.waiting_list_position).to eq(2)
+        expect(reg3.waiting_list_position).to eq(3)
+        expect(reg4.waiting_list_position).to eq(4)
+        expect(reg5.waiting_list_position).to eq(5)
+      end
+    end
+  end
+
+  describe 'hooks' do
+    it 'positive registration_payment calls registration.consider_auto_close' do
+      competition = FactoryBot.create(:competition)
+      reg = FactoryBot.create(:registration, competition: competition)
+      expect(reg).to receive(:consider_auto_close)
+
+      FactoryBot.create(
+        :registration_payment,
+        registration: reg,
+        user: reg.user,
+        amount_lowest_denomination: reg.competition.base_entry_fee_lowest_denomination,
+      )
+    end
+
+    it 'doesnt call registration.auto_close! after a refund is created' do
+      competition = FactoryBot.create(:competition)
+      reg = FactoryBot.create(:registration, :paid, competition: competition)
+      expect(reg).to receive(:consider_auto_close).exactly(0).times
+
+      FactoryBot.create(
+        :registration_payment,
+        registration: reg,
+        user: reg.user,
+        amount_lowest_denomination: -reg.competition.base_entry_fee_lowest_denomination,
+        refunded_registration_payment_id: reg.registration_payments.first.id,
+      )
+    end
+
+    it 'doesnt competition.attempt_auto_close! if reg is partially paid' do
+      competition = FactoryBot.create(:competition)
+      expect(competition).to receive(:attempt_auto_close!).exactly(0).times
+
+      reg = FactoryBot.create(:registration, :partially_paid, competition: competition)
+      reg.consider_auto_close
+    end
+
+    it 'calls competition.attempt_auto_close! if reg is fully paid' do
+      competition = FactoryBot.create(:competition)
+      expect(competition).to receive(:attempt_auto_close!).exactly(1).times
+
+      FactoryBot.create(:registration, :paid, competition: competition)
+    end
+  end
+
+  describe '#newcomer_month_eligible_competitors_count' do
+    let(:newcomer_month_comp) { FactoryBot.create(:competition, :newcomer_month) }
+    let!(:newcomer_reg) { FactoryBot.create(:registration, :newcomer, :accepted, competition: newcomer_month_comp) }
+
+    before do
+      FactoryBot.create_list(:registration, 2, :accepted, competition: newcomer_month_comp)
+    end
+
+    it 'doesnt include non-newcomers in count' do
+      newcomer_reg.competing_status = "accepted"
+      expect(newcomer_month_comp.registrations.count).to eq(3)
+      expect(newcomer_month_comp.registrations.newcomer_month_eligible_competitors_count).to eq(1)
+    end
+
+    it 'doesnt include newcomers in non-accepted states' do
+      FactoryBot.create(:registration, :newcomer, competition: newcomer_month_comp)
+      FactoryBot.create(:registration, :newcomer, :cancelled, competition: newcomer_month_comp)
+      FactoryBot.create(:registration, :newcomer, :rejected, competition: newcomer_month_comp)
+      FactoryBot.create(:registration, :newcomer, :waiting_list, competition: newcomer_month_comp)
+
+      expect(newcomer_month_comp.registrations.count).to eq(7)
+      expect(newcomer_month_comp.registrations.newcomer_month_eligible_competitors_count).to eq(1)
+    end
+  end
+
+  it 'validates presence of registered_at' do
+    reg = FactoryBot.build(:registration, registered_at: nil)
+    expect(reg).not_to be_valid
+    expect(reg.errors[:registered_at]).to include("can't be blank")
   end
 end

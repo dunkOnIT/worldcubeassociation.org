@@ -1,10 +1,11 @@
+# rubocop:disable all
 # frozen_string_literal: true
 
 class UpdateListOfCountries < ActiveRecord::Migration[5.0]
   def up
     ActiveRecord::Base.transaction do
       Country.delete_all
-      Country::ALL_STATES.each(&:save!)
+      Country.load_json_data!
       # These substitions have been found by running the migration and checking
       # users with iso2 not matching anything in the 'Country' table.
       {

@@ -7,10 +7,6 @@ class UsersController < ApplicationController
 
   RECENT_AUTHENTICATION_DURATION = 10.minutes.freeze
 
-  def self.WCA_TEAMS
-    %w(wst wrt wdc wrc wct)
-  end
-
   def index
     params[:order] = params[:order] == "asc" ? "asc" : "desc"
 
@@ -25,7 +21,7 @@ class UsersController < ApplicationController
         @users = User.in_region(params[:region])
         params[:search]&.split&.each do |part|
           like_query = %w(users.name wca_id email).map do |column|
-            column + " LIKE :part"
+            "#{column} LIKE :part"
           end.join(" OR ")
           @users = @users.where(like_query, part: "%#{part}%")
         end
@@ -37,12 +33,12 @@ class UsersController < ApplicationController
           total: @users.size,
           rows: @users.limit(params[:limit]).offset(params[:offset]).map do |user|
             {
-              wca_id: user.wca_id ? view_context.link_to(user.wca_id, person_path(user.wca_id)) : "",
+              wca_id: user.wca_id,
               name: ERB::Util.html_escape(user.name),
               # Users don't have to provide a country upon registration
-              country: user.country&.id,
+              country: user.country&.iso2,
               email: ERB::Util.html_escape(user.email),
-              edit: view_context.link_to("Edit", edit_user_path(user)),
+              user_id: user.id,
             }
           end,
         }
@@ -51,7 +47,7 @@ class UsersController < ApplicationController
   end
 
   private def user_to_edit
-    User.find_by_id(params[:id] || current_user.id)
+    User.find_by(id: params[:id] || current_user.id)
   end
 
   def enable_2fa
@@ -130,7 +126,7 @@ class UsersController < ApplicationController
     params[:section] ||= "general"
 
     @user = user_to_edit
-    nil if redirect_if_cannot_edit_user(@user)
+    return if redirect_if_cannot_edit_user(@user)
     @current_user = current_user
   end
 
@@ -150,17 +146,72 @@ class UsersController < ApplicationController
     render partial: 'select_nearby_delegate'
   end
 
-  def edit_avatar_thumbnail
-    @user = user_to_edit
-    redirect_to_root_unless_user(:can_change_users_avatar?, @user)
+  def avatar_data
+    user = user_to_edit
+
+    avatar_data = {
+      avatar: user.avatar,
+      pendingAvatar: user.pending_avatar,
+    }
+
+    render json: avatar_data
   end
 
-  def edit_pending_avatar_thumbnail
-    @user = user_to_edit
-    @pending_avatar = true
-    redirect_to_root_unless_user(:can_change_users_avatar?, @user) && return
+  def upload_avatar
+    upload_file = params.require(:file)
 
-    render :edit_avatar_thumbnail
+    thumbnail_json = params.require(:thumbnail)
+    thumbnail = JSON.parse(thumbnail_json).symbolize_keys
+
+    user_avatar = UserAvatar.build(
+      user: user_to_edit,
+      thumbnail_crop_x: thumbnail[:x],
+      thumbnail_crop_y: thumbnail[:y],
+      thumbnail_crop_w: thumbnail[:width],
+      thumbnail_crop_h: thumbnail[:height],
+      private_image: upload_file,
+    )
+
+    if user_avatar.save
+      render json: { ok: true }
+    else
+      render status: :unprocessable_content, json: user_avatar.errors
+    end
+  end
+
+  def update_avatar
+    avatar_id = params.require(:avatarId)
+
+    user_avatar = user_to_edit.user_avatars.find(avatar_id)
+    return head :not_found if user_avatar.blank?
+
+    thumbnail = params.require(:thumbnail)
+
+    user_avatar.update!(
+      thumbnail_crop_x: thumbnail[:x],
+      thumbnail_crop_y: thumbnail[:y],
+      thumbnail_crop_w: thumbnail[:width],
+      thumbnail_crop_h: thumbnail[:height],
+    )
+
+    render json: { ok: true }
+  end
+
+  def delete_avatar
+    avatar_id = params.require(:avatarId)
+
+    user_avatar = user_to_edit.user_avatars.find(avatar_id)
+    return head :not_found if user_avatar.blank?
+
+    reason = params.require(:reason)
+
+    user_avatar.update!(
+      status: UserAvatar.statuses[:deleted],
+      revoked_by_user: current_user,
+      revocation_reason: reason,
+    )
+
+    render json: { ok: true }
   end
 
   def update
@@ -169,8 +220,8 @@ class UsersController < ApplicationController
     return if redirect_if_cannot_edit_user(@user)
 
     dangerous_change = current_user == @user && [:password, :password_confirmation, :email].any? { |attribute| user_params.key? attribute }
-    if dangerous_change
-      return unless check_recent_authentication!
+    if dangerous_change && !check_recent_authentication!
+      return
     end
 
     old_confirmation_sent_at = @user.confirmation_sent_at
@@ -206,11 +257,20 @@ class UsersController < ApplicationController
     end
   end
 
+  private def sso_moderator?(user)
+    user.communication_team? || user.results_team?
+  end
+
   def sso_discourse
     # This implements https://meta.discourse.org/t/official-single-sign-on-for-discourse-sso/13045
     # (section "implementing SSO on your site")
     # Note that we do validate emails (as in: users can't log in until they have
     # validated their emails).
+
+    if current_user.forum_banned?
+      flash[:alert] = I18n.t('registrations.errors.banned_html').html_safe
+      return redirect_to new_user_session_path
+    end
 
     # Use the 'SingleSignOn' lib provided by Discourse. Our secret and URL is
     # already configured there.
@@ -221,17 +281,13 @@ class UsersController < ApplicationController
     all_groups = User.all_discourse_groups
 
     # Get the teams/councils/Delegate status for user
-    user_groups = current_user.current_teams.select(&:official_or_council?).map(&:friendly_id)
-    user_groups.concat(current_user.delegate_roles.map { |delegate_role| UserRole.status(delegate_role) }.uniq)
-    # Board is (expectedly) not included in "current_teams", so we have to add
-    # it manually.
-    user_groups << Team.board.friendly_id if current_user.board_member?
+    user_groups = current_user.active_roles.map { |role| role.discourse_user_group }.uniq.compact.sort
 
     sso.external_id = current_user.id
     sso.name = current_user.name
     sso.email = current_user.email
     sso.avatar_url = current_user.avatar_url
-    sso.moderator = current_user.wac_team?
+    sso.moderator = sso_moderator?(current_user)
     sso.locale = current_user.locale
     sso.locale_force_update = true
     sso.add_groups = user_groups.join(",")
@@ -264,7 +320,7 @@ class UsersController < ApplicationController
   end
 
   def acknowledge_cookies
-    return render status: 401, json: { ok: false } if current_user.nil?
+    return render status: :unauthorized, json: { ok: false } if current_user.nil?
 
     current_user.update!(cookies_acknowledged: true)
     render json: { ok: true }
@@ -283,6 +339,20 @@ class UsersController < ApplicationController
     params.require(:user).permit(current_user.editable_fields_of_user(user_to_edit).to_a).tap do |user_params|
       if user_params.key?(:wca_id)
         user_params[:wca_id] = user_params[:wca_id].upcase
+      end
+      if user_params.key?(:delegate_reports_region)
+        raw_region = user_params.delete(:delegate_reports_region)
+
+        if raw_region.blank?
+          # Explicitly reset the region type column when "worldwide" (represented by a blank value) was selected
+          user_params[:delegate_reports_region_type] = nil
+        elsif raw_region.starts_with?('_')
+          user_params[:delegate_reports_region_type] = 'Continent'
+        else
+          user_params[:delegate_reports_region_type] = 'Country'
+        end
+
+        user_params[:delegate_reports_region_id] = raw_region.presence
       end
     end
   end

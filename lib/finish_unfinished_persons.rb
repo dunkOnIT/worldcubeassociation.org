@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'fuzzystringmatch'
-
 module FinishUnfinishedPersons
   WCA_ID_PADDING = 'U'
   WCA_QUARTER_ID_LENGTH = 4
@@ -30,7 +28,7 @@ module FinishUnfinishedPersons
     unfinished_persons = []
     available_id_spots = {} # to make sure that all of the newcomer IDs that we're creating in one batch are unique among each other
 
-    @persons_cache = nil
+    persons_cache = Person.select(:id, :wca_id, :name, :dob, :countryId)
 
     unfinished_person_results.each do |res|
       next if unfinished_persons.length >= MAX_PER_BATCH
@@ -42,7 +40,7 @@ module FinishUnfinishedPersons
 
       inbox_dob = res.inbox_person&.dob
 
-      similar_persons = compute_similar_persons(res)
+      similar_persons = compute_similar_persons(res, persons_cache)
 
       unfinished_persons.push({
                                 person_id: res.person_id,
@@ -74,18 +72,14 @@ module FinishUnfinishedPersons
     end.join
   end
 
-  def self.persons_cache
-    @persons_cache ||= Person.select(:id, :wca_id, :name, :dob, :countryId)
-  end
-
-  def self.compute_similar_persons(result, n = 5)
+  def self.compute_similar_persons(result, persons_cache, n = 5)
     res_roman_name = self.extract_roman_name(result.person_name)
 
     only_probas = []
     persons_with_probas = []
 
     # pre-cache probabilities, so that we avoid doing string computations on _every_ comparison
-    self.persons_cache.each do |p|
+    persons_cache.each do |p|
       p_roman_name = self.extract_roman_name(p.name)
 
       name_similarity = self.string_similarity(res_roman_name, p_roman_name)
@@ -95,7 +89,7 @@ module FinishUnfinishedPersons
       persons_with_probas.push [p, name_similarity, country_similarity]
     end
 
-    proba_threshold = only_probas.sort { |a, b| b <=> a }.take(2 * n).last
+    proba_threshold = only_probas.sort.reverse.take(2 * n).last
     sorting_candidates = persons_with_probas.filter { |_, np, _| np >= proba_threshold }
 
     # `sort_by` is _sinfully_ expensive, so we try to reduce the amount of comparisons as much as possible.
@@ -103,14 +97,10 @@ module FinishUnfinishedPersons
                       .take(n)
   end
 
-  def self.string_similarity_algorithm
-    # Original PHP implementation uses PHP stdlib `string_similarity` function, which is custom built
-    # and "kinda like" Jaro-Winkler. I felt that the rewrite warrants a standardised matching algorithm.
-    @jaro_winkler ||= FuzzyStringMatch::JaroWinkler.create(:native)
-  end
-
+  # Original PHP implementation uses PHP stdlib `string_similarity` function, which is custom built
+  # and "kinda like" Jaro-Winkler. I felt that the rewrite warrants a standardised matching algorithm.
   def self.string_similarity(a, b)
-    self.string_similarity_algorithm.getDistance(a, b)
+    JaroWinkler.similarity(a, b, ignore_case: true)
   end
 
   def self.compute_semi_id(competition_year, person_name, available_per_semi = {})
@@ -134,8 +124,7 @@ module FinishUnfinishedPersons
       unless available_per_semi.key?(semi_id)
         last_id_taken = Person.where('wca_id LIKE ?', "#{semi_id}__")
                               .order(wca_id: :desc)
-                              .pluck(:wca_id)
-                              .first
+                              .pick(:wca_id)
 
         if last_id_taken.present?
           # 4 because the year prefix is 4 digits long
@@ -202,7 +191,7 @@ module FinishUnfinishedPersons
     results_scope = Result
 
     if pending_id.present?
-      raise "Must supply a competition ID for updating newcomer results!" unless pending_comp_id.present?
+      raise "Must supply a competition ID for updating newcomer results!" if pending_comp_id.blank?
 
       results_scope = results_scope.where(
         personId: pending_id,

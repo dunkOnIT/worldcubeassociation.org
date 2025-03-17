@@ -3,7 +3,6 @@
 require 'rails_helper'
 
 RSpec.describe ReassignWcaId do
-  let(:region) { FactoryBot.create(:africa_region) }
   let(:account1) { FactoryBot.create(:user_with_wca_id, country_iso2: "US") }
   let(:shared_attributes) { account1.attributes.symbolize_keys.slice(:name, :country_iso2, :gender, :dob) }
   let(:account2) { FactoryBot.create(:user, shared_attributes) }
@@ -51,7 +50,7 @@ RSpec.describe ReassignWcaId do
   end
 
   it "can actually reassign wca id" do
-    team_member = FactoryBot.create(:team_member, user_id: account1.id)
+    team_member = FactoryBot.create(:wfc_member_role, user_id: account1.id)
     delegated_competition = FactoryBot.create(:competition)
     delegated_competition.delegates << account1
     organized_competition = FactoryBot.create(:competition)
@@ -61,10 +60,10 @@ RSpec.describe ReassignWcaId do
     wca_id = account1.wca_id
     delegate_status = account1.delegate_status
 
-    expect(reassign_wca_id.do_reassign_wca_id).to eq true
-    expect(account1.reload.wca_id).to eq nil
+    expect(reassign_wca_id.do_reassign_wca_id).to be true
+    expect(account1.reload.wca_id).to be nil
     expect(account2.reload.wca_id).to eq wca_id
-    expect(account1.reload.delegate_status).to eq nil
+    expect(account1.reload.delegate_status).to be nil
     expect(account2.reload.delegate_status).to eq delegate_status
     expect(team_member.reload.user_id).to eq account2.id
     expect(organized_competition.reload.organizers[0].id).to eq account2.id

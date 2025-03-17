@@ -1,15 +1,15 @@
 import React from 'react';
-import SubSection from './SubSection';
-import { InputBooleanSelect, InputNumber, InputTextArea } from '../Inputs/FormInputs';
-import { useStore } from '../../../lib/providers/StoreProvider';
+import { InputBooleanSelect, InputNumber, InputTextArea } from '../../wca/FormBuilder/input/FormInputs';
 import ConditionalSection from './ConditionalSection';
+import SubSection from '../../wca/FormBuilder/SubSection';
+import { useFormObject } from '../../wca/FormBuilder/provider/FormObjectProvider';
 
 export default function CompetitorLimit() {
   const {
-    competition: { competitorLimit },
-  } = useStore();
-
-  const hasLimit = competitorLimit.enabled;
+    competitorLimit: {
+      enabled: hasLimit,
+    },
+  } = useFormObject();
 
   return (
     <SubSection section="competitorLimit">
@@ -17,6 +17,8 @@ export default function CompetitorLimit() {
       <ConditionalSection showIf={hasLimit}>
         <InputNumber id="count" min={0} />
         <InputTextArea id="reason" />
+        <InputNumber id="autoCloseThreshold" min={1} nullable />
+        <InputNumber id="newcomerMonthReservedSpots" min={1} nullable />
       </ConditionalSection>
     </SubSection>
   );

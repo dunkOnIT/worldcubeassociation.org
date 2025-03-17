@@ -10,7 +10,7 @@ class WcaCronjob < ApplicationJob
   before_enqueue do |job|
     statistics = job.class.cronjob_statistics
 
-    if statistics.scheduled? || statistics.in_progress? || statistics.recently_errored > 0
+    if statistics.scheduled? || statistics.in_progress? || statistics.recently_errored?
       statistics.increment! :recently_rejected
 
       # Make ActiveJob abort and do NOT enqueue the job
@@ -70,6 +70,10 @@ class WcaCronjob < ApplicationJob
       if run_successful
         statistics.increment :times_completed
 
+        # Record that this run was successful. In the event of a crash, we record that the CJ started and then crashed
+        #   but there are use cases where we want to know when it started AND completed successfully.
+        statistics.successful_run_start = statistics.run_start
+
         runtime = (statistics.run_end - statistics.run_start).in_milliseconds
 
         current_average = statistics.average_runtime || 0
@@ -86,7 +90,7 @@ class WcaCronjob < ApplicationJob
   end
 
   class << self
-    delegate :in_progress?, :scheduled?, :enqueued_at, :finished?, :last_run_successful?, :last_error_message, to: :cronjob_statistics
+    delegate :in_progress?, :scheduled?, :enqueued_at, :finished?, :last_run_successful?, :last_error_message, :recently_errored?, to: :cronjob_statistics
 
     def cronjob_statistics
       CronjobStatistic.find_or_create_by!(name: self.name)
@@ -98,6 +102,19 @@ class WcaCronjob < ApplicationJob
 
     def end_date
       self.cronjob_statistics.run_end
+    end
+
+    def successful_start_date
+      self.cronjob_statistics.successful_run_start
+    end
+
+    def reset_error_state!
+      self.cronjob_statistics.update!(
+        run_start: nil,
+        run_end: nil,
+        recently_errored: 0,
+        last_error_message: nil,
+      )
     end
   end
 end

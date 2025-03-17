@@ -3,12 +3,11 @@
 class TranslationsController < ApplicationController
   before_action :authenticate_user!, except: [:index]
 
-  def self.bad_i18n_keys
-    @bad_keys ||= begin
-      english = locale_to_translation('en')
-      (I18n.available_locales - [:en]).to_h do |locale|
-        [locale, locale_to_translation(locale).compare_to(english)]
-      end
+  def self.compute_bad_i18n_keys
+    english = locale_to_translation('en')
+
+    (I18n.available_locales - [:en]).index_with do |locale|
+      locale_to_translation(locale).compare_to(english)
     end
   end
 
@@ -18,8 +17,10 @@ class TranslationsController < ApplicationController
     WcaI18n::Translation.new(locale, File.read(filename))
   end
 
+  BAD_I18N_KEYS = self.compute_bad_i18n_keys
+
   def index
-    @bad_i18n_keys = self.class.bad_i18n_keys
+    @bad_i18n_keys = TranslationsController::BAD_I18N_KEYS
     bad_keys = @bad_i18n_keys.values.map(&:values).flatten
     @all_translations_perfect = bad_keys.empty?
   end
@@ -57,7 +58,7 @@ class TranslationsController < ApplicationController
     info = ["WCA Account ID: *#{user.id}*"]
     info.unshift("WCA ID: *[#{user.wca_id}](#{person_url(user.wca_id)})*") if user.wca_id
     is_verified_translator = false
-    UserGroup.translator_groups.each do |translators_group|
+    UserGroup.translators.each do |translators_group|
       if translators_group.roles.any? { |role| role.user_id == user.id && role.group.metadata.locale == locale }
         is_verified_translator = true
         break

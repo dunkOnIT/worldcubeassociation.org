@@ -2,6 +2,7 @@
 
 class Api::V0::ApiController < ApplicationController
   include Rails::Pagination
+  include NewRelic::Agent::Instrumentation::ControllerInstrumentation if Rails.env.production?
   protect_from_forgery with: :null_session
   before_action :doorkeeper_authorize!, only: [:me]
   rescue_from WcaExceptions::ApiException do |e|
@@ -18,6 +19,10 @@ class Api::V0::ApiController < ApplicationController
     render json: { me: current_api_user }, private_attributes: doorkeeper_token.scopes
   end
 
+  def healthcheck
+    render json: { status: "ok", api_instance: EnvConfig.API_ONLY? }
+  end
+
   def auth_results
     if !current_user
       return render status: :unauthorized, json: { error: "Please log in" }
@@ -27,6 +32,24 @@ class Api::V0::ApiController < ApplicationController
     end
 
     render json: { status: "ok" }
+  end
+
+  def user_qualification_data
+    date = cutoff_date
+    return render json: { error: 'Invalid date format. Please provide an iso8601 date string.' }, status: :bad_request if date.blank?
+    return render json: { error: 'You cannot request qualification data for a future date.' }, status: :bad_request if date > Date.current
+
+    user = User.find(params.require(:user_id))
+
+    render json: Registrations::Helper.user_qualification_data(user, date)
+  end
+
+  private def cutoff_date
+    if params[:date].present?
+      Date.safe_parse(params[:date])
+    else
+      Date.current
+    end
   end
 
   def scramble_program
@@ -88,9 +111,6 @@ class Api::V0::ApiController < ApplicationController
         "TNoodle-WCA-1.2.2",
       ],
     }
-  end
-
-  def help
   end
 
   def search(*models)
@@ -156,14 +176,26 @@ class Api::V0::ApiController < ApplicationController
   end
 
   def delegates
-    paginate json: UserGroup.delegate_region_groups.flat_map(&:active_users)
+    paginate json: UserGroup.delegate_regions.flat_map(&:active_users)
+  end
+
+  def delegates_search_index
+    # TODO: There is a `uniq` call at the end which I feel shouldn't be necessary?!
+    #   Postponing investigation until the Roles system migration is complete.
+    all_delegates = UserGroup.includes(active_users: [:current_avatar]).delegate_regions.flat_map(&:active_users).uniq
+
+    search_index = all_delegates.map do |delegate|
+      delegate.slice(:id, :name, :wca_id).merge({ thumb_url: delegate.avatar.thumbnail_url })
+    end
+
+    render json: search_index
   end
 
   def records
     concise_results_date = ComputeAuxiliaryData.end_date || Date.current
     cache_key = ["records", concise_results_date.iso8601]
     json = Rails.cache.fetch(cache_key) do
-      records = ActiveRecord::Base.connection.exec_query <<-SQL
+      records = ActiveRecord::Base.connection.exec_query <<-SQL.squish
         SELECT 'single' type, MIN(best) value, countryId country_id, eventId event_id
         FROM ConciseSingleResults
         GROUP BY countryId, eventId
@@ -200,12 +232,14 @@ class Api::V0::ApiController < ApplicationController
     end
   end
 
+  def authenticated_user
+    current_api_user || current_user
+  end
+
   # Find the user that owns the access token.
   # From: https://github.com/doorkeeper-gem/doorkeeper#authenticated-resource-owner
   private def current_api_user
-    return @current_api_user if defined?(@current_api_user)
-
-    @current_api_user = User.find_by_id(doorkeeper_token&.resource_owner_id)
+    @current_api_user ||= User.find_by(id: doorkeeper_token&.resource_owner_id) if doorkeeper_token&.accessible?
   end
 
   private def require_user!
@@ -218,8 +252,8 @@ class Api::V0::ApiController < ApplicationController
   end
 
   def competition_series
-    competition_series = CompetitionSeries.find_by_wcif_id(params[:id])
-    if !competition_series.present? || competition_series.public_competitions.empty?
+    competition_series = CompetitionSeries.find_by(wcif_id: params[:id])
+    if competition_series.blank? || competition_series.public_competitions.empty?
       raise WcaExceptions::NotFound.new("Competition series with ID #{params[:id]} not found")
     end
     render json: competition_series.to_wcif

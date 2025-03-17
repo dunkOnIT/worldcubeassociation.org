@@ -4,6 +4,9 @@
         "es6": true,
         "jquery": true
     },
+  "ignorePatterns": [
+    "app/assets/javascripts/*"
+  ],
     "extends": [
         "plugin:react/recommended",
         "plugin:react-hooks/recommended",
@@ -19,7 +22,7 @@
         "ecmaFeatures": {
             "jsx": true
         },
-        "ecmaVersion": 2022,
+        "ecmaVersion": 14,
         "sourceType": "module"
     },
     "plugins": [

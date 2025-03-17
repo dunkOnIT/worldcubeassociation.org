@@ -21,10 +21,12 @@ import Store, { useDispatch, useStore } from '../../lib/providers/StoreProvider'
 import ConfirmProvider from '../../lib/providers/ConfirmProvider';
 import EditVenues from './EditVenues';
 import EditActivities from './EditActivities';
+import WCAQueryClientProvider from '../../lib/providers/WCAQueryClientProvider';
 
 function EditSchedule({
   wcifEvents,
   countryZones,
+  referenceTime,
   calendarLocale,
 }) {
   const {
@@ -131,6 +133,7 @@ function EditSchedule({
           >
             <EditVenues
               countryZones={countryZones}
+              referenceTime={referenceTime}
             />
           </Accordion.Content>
           <Accordion.Title
@@ -145,6 +148,7 @@ function EditSchedule({
           >
             <EditActivities
               wcifEvents={wcifEvents}
+              referenceTime={referenceTime}
               calendarLocale={calendarLocale}
             />
           </Accordion.Content>
@@ -160,6 +164,7 @@ export default function Wrapper({
   wcifEvents,
   wcifSchedule,
   countryZones,
+  referenceTime,
   calendarLocale,
 }) {
   return (
@@ -172,11 +177,14 @@ export default function Wrapper({
       }}
     >
       <ConfirmProvider>
-        <EditSchedule
-          countryZones={countryZones}
-          wcifEvents={wcifEvents}
-          calendarLocale={calendarLocale}
-        />
+        <WCAQueryClientProvider>
+          <EditSchedule
+            wcifEvents={wcifEvents}
+            countryZones={countryZones}
+            referenceTime={referenceTime}
+            calendarLocale={calendarLocale}
+          />
+        </WCAQueryClientProvider>
       </ConfirmProvider>
     </Store>
   );

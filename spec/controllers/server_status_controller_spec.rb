@@ -8,7 +8,7 @@ RSpec.describe ServerStatusController, type: :controller do
 
     get :index
 
-    expect(response).to have_http_status 200
+    expect(response).to have_http_status :ok
   end
 
   it "can fail" do
@@ -16,7 +16,7 @@ RSpec.describe ServerStatusController, type: :controller do
 
     get :index
 
-    expect(response).to have_http_status 503
+    expect(response).to have_http_status :service_unavailable
   end
 end
 
@@ -107,6 +107,6 @@ RSpec.describe "RegulationsCheck" do
     expect(status).to eq :danger
     # The \d reference is a line number in the external `json` gem which might change every now and then.
     # We want to avoid having to change our tests whenever that library updates.
-    expect(description).to match(/Error while loading regulations: unexpected token at 'i am definitely not json' from JSON::ParserError/)
+    expect(description).to match(/Error while loading regulations: unexpected character: 'i am definitely not json' from JSON::ParserError/)
   end
 end

@@ -91,10 +91,12 @@ RSpec.describe "users" do
 
   context "user without 2FA" do
     let!(:user) { FactoryBot.create(:user) }
+
     before { sign_in user }
 
     context "recently authenticated" do
       before { post users_authenticate_sensitive_path, params: { 'user[password]': user.password } }
+
       it 'can enable 2FA' do
         post profile_enable_2fa_path
         expect(response.body).to include "Successfully enabled two-factor"
@@ -104,8 +106,8 @@ RSpec.describe "users" do
       it 'does not generate backup codes for user without 2FA' do
         expect {
           post profile_generate_2fa_backup_path
-        }.to_not change { user.otp_backup_codes }
-        json = JSON.parse(response.body)
+        }.not_to change(user, :otp_backup_codes)
+        json = response.parsed_body
         expect(json["error"]["message"]).to include "not enabled"
       end
     end
@@ -122,7 +124,7 @@ RSpec.describe "users" do
         expect {
           post profile_generate_2fa_backup_path
           follow_redirect!
-        }.to_not change { user.otp_backup_codes }
+        }.not_to change(user, :otp_backup_codes)
         expect(response.body).to include I18n.t('users.edit.sensitive.identity_error')
       end
     end
@@ -130,15 +132,18 @@ RSpec.describe "users" do
 
   context "user with 2FA" do
     let!(:user) { FactoryBot.create(:user, :with_2fa) }
+
     before { sign_in user }
+
     context "recently authenticated" do
       before { post users_authenticate_sensitive_path, params: { 'user[otp_attempt]': user.current_otp } }
+
       it 'can reset 2FA' do
         secret_before = user.otp_secret
         post profile_enable_2fa_path
         secret_after = user.reload.otp_secret
         expect(response.body).to include "Successfully regenerated"
-        expect(secret_before).to_not eq secret_after
+        expect(secret_before).not_to eq secret_after
       end
 
       it 'can disable 2FA' do
@@ -148,10 +153,10 @@ RSpec.describe "users" do
       end
 
       it 'can (re)generate backup codes for user with 2FA' do
-        expect(user.otp_backup_codes).to eq nil
+        expect(user.otp_backup_codes).to be nil
         post profile_generate_2fa_backup_path
-        expect(user.reload.otp_backup_codes).to_not eq nil
-        json = JSON.parse(response.body)
+        expect(user.reload.otp_backup_codes).not_to be nil
+        json = response.parsed_body
         expect(json["codes"]&.size).to eq User::NUMBER_OF_BACKUP_CODES
       end
     end
@@ -160,8 +165,8 @@ RSpec.describe "users" do
   context "Discourse SSO" do
     let(:sso) { SingleSignOn.new }
 
-    it "authenticates WAC user and validates user attributes" do
-      user = FactoryBot.create(:user, :wac_member, :wca_id)
+    it "authenticates WCT user and validates user attributes" do
+      user = FactoryBot.create(:wct_member_role, user: FactoryBot.create(:user_with_wca_id)).user
       sign_in user
       sso.nonce = 1234
       get "#{sso_discourse_path}?#{sso.payload}"
@@ -172,8 +177,8 @@ RSpec.describe "users" do
       [:name, :email, :avatar_url].each do |a|
         expect(answer_sso.send(a)).to eq user.send(a)
       end
-      expect(answer_sso.add_groups).to eq "wac"
-      expect(answer_sso.remove_groups).to eq((User.all_discourse_groups - ["wac"]).join(","))
+      expect(answer_sso.add_groups).to eq "wct"
+      expect(answer_sso.remove_groups).to eq((User.all_discourse_groups - ["wct"]).join(","))
       expect(answer_sso.custom_fields["wca_id"]).to match user.wca_id
     end
 
@@ -200,12 +205,20 @@ RSpec.describe "users" do
       # WST is not moderator by default, admin status is granted manually in
       # Discourse
       expect(answer_sso.moderator).to be false
-      expect(answer_sso.add_groups).to eq "wst,delegate"
+      expect(answer_sso.add_groups).to eq "delegate,wst"
       expect(answer_sso.remove_groups).to eq((User.all_discourse_groups - ["wst", "delegate"]).join(","))
     end
 
     it "doesn't authenticate unconfirmed user" do
       user = FactoryBot.create(:user, confirmed: false)
+      sign_in user
+      sso.nonce = 1234
+      get "#{sso_discourse_path}?#{sso.payload}"
+      expect(response).to redirect_to new_user_session_path
+    end
+
+    it 'doesnt authenticate user banned from discourse' do
+      user = FactoryBot.create(:user, :banned)
       sign_in user
       sso.nonce = 1234
       get "#{sso_discourse_path}?#{sso.payload}"

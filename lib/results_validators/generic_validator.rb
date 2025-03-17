@@ -4,8 +4,6 @@ module ResultsValidators
   class GenericValidator
     attr_reader :errors, :warnings, :infos, :apply_fixes
 
-    @desc = "Please override that class variable with a proper description when you inherit the class."
-
     def initialize(apply_fixes: false)
       @apply_fixes = apply_fixes
       reset_state
@@ -53,7 +51,7 @@ module ResultsValidators
     end
 
     def self.description
-      @desc
+      raise "Please override that class variable with a proper description when you inherit the class."
     end
 
     def self.class_name
@@ -95,8 +93,8 @@ module ResultsValidators
         # where a round_id may be missing in the competition rounds: if it was a
         # cutoff round and everyone made the cutoff!
         # See additional comment here: https://github.com/thewca/worldcubeassociation.org/pull/4357#discussion_r307312177
-        rounds_information = competition.competition_events.flat_map(&:rounds).to_h do |r|
-          ["#{r.event.id}-#{r.round_type_id}", r]
+        rounds_information = competition.competition_events.flat_map(&:rounds).index_by do |r|
+          "#{r.event.id}-#{r.round_type_id}"
         end
         # Now try to "cast" a declared cutoff round to an existing non-cutoff round
         missing_round_ids = round_ids_from_results - rounds_information.keys

@@ -2,8 +2,6 @@
 
 require_relative 'boot'
 require_relative 'locales/locales'
-require_relative '../lib/middlewares/fix_accept_header'
-require_relative '../lib/middlewares/warden_user_logger'
 
 require 'rails/all'
 
@@ -12,6 +10,10 @@ require 'rails/all'
 Bundler.require(*Rails.groups)
 require_relative '../env_config'
 require_relative '../app_secrets'
+
+# Production default for configuring Rails cryptographic base key,
+# which is necessary because `config.secret_key_base=` only works in local environments.
+ENV["SECRET_KEY_BASE"] ||= AppSecrets.SECRET_KEY_BASE
 
 module WcaOnRails
   BOOTED_AT = Time.now
@@ -29,7 +31,20 @@ module WcaOnRails
     # config.i18n.load_path += Dir[Rails.root.join('my', 'locales', '*.{rb,yml}').to_s]
     # config.i18n.default_locale = :de
 
-    config.load_defaults 7.0
+    # secret_key_base is an important cryptographic key that lots of other Rails procedures (cookies, signatures, etc.)
+    # are based on. Rails desperately wants you to set it through `credentials.yml.enc` but GB desperately doesn't want
+    # to check in credentials to git (no matter whether their encryption is strong or not)
+    config.secret_key_base = AppSecrets.SECRET_KEY_BASE
+
+    config.load_defaults 7.2
+
+    # Force belongs_to validations even on empty/unset keys.
+    #   This is potentially a Rails bug (?!?) and has been reported at https://github.com/rails/rails/issues/52614
+    config.active_record.belongs_to_required_validates_foreign_key = true
+
+    # Make sure we can decrypt data that was encrypted before Rails 7.1
+    #   God only knows why Rails decided to make the backwards-INCOMPATIBLE `false` their upgrade default
+    config.active_record.encryption.support_sha1_for_non_deterministic_encryption = true
 
     config.active_job.queue_adapter = :sidekiq
 
@@ -47,7 +62,11 @@ module WcaOnRails
     end
 
     config.default_from_address = "notifications@worldcubeassociation.org"
-    config.site_name = "World Cube Association"
+    config.site_name = if EnvConfig.API_ONLY?
+                         "World Cube Association API"
+                       else
+                         "World Cube Association"
+                       end
 
     config.middleware.insert_before 0, Rack::Cors, debug: false, logger: (-> { Rails.logger }) do
       allow do
@@ -71,9 +90,6 @@ module WcaOnRails
     # the I18n.default_locale when a translation cannot be found).
     config.i18n.fallbacks = [:en]
 
-    config.middleware.use Middlewares::FixAcceptHeader
-    config.middleware.use Middlewares::WardenUserLogger, logger: ->(s) { Rails.logger.info(s) }
-
     config.autoload_paths << Rails.root.join('lib')
     config.eager_load_paths << Rails.root.join('lib')
 
@@ -95,7 +111,5 @@ module WcaOnRails
     config.active_record.encryption.primary_key = AppSecrets.ACTIVERECORD_PRIMARY_KEY
     config.active_record.encryption.deterministic_key = AppSecrets.ACTIVERECORD_DETERMINISTIC_KEY
     config.active_record.encryption.key_derivation_salt = AppSecrets.ACTIVERECORD_KEY_DERIVATION_SALT
-
-    config.active_record.encryption.hash_digest_class = OpenSSL::Digest::SHA256
   end
 end

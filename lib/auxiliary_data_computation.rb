@@ -4,6 +4,7 @@ module AuxiliaryDataComputation
   def self.compute_everything
     self.compute_concise_results
     self.compute_rank_tables
+    self.insert_regional_records_lookup
   end
 
   ## Build 'concise results' tables.
@@ -12,10 +13,9 @@ module AuxiliaryDataComputation
       %w(best ConciseSingleResults),
       %w(average ConciseAverageResults),
     ].each do |field, table_name|
-      ActiveRecord::Base.transaction do
-        ActiveRecord::Base.connection.execute "DELETE FROM #{table_name}"
-        ActiveRecord::Base.connection.execute <<-SQL
-          INSERT INTO #{table_name} (id, #{field}, valueAndId, personId, eventId, countryId, continentId, year, month, day)
+      DbHelper.with_temp_table(table_name) do |temp_table_name|
+        ActiveRecord::Base.connection.execute <<-SQL.squish
+          INSERT INTO #{temp_table_name} (id, #{field}, valueAndId, personId, eventId, countryId, continentId, year, month, day)
           SELECT
             result.id,
             #{field},
@@ -49,11 +49,10 @@ module AuxiliaryDataComputation
       %w(best RanksSingle ConciseSingleResults),
       %w(average RanksAverage ConciseAverageResults),
     ].each do |field, table_name, concise_table_name|
-      ActiveRecord::Base.transaction do
-        ActiveRecord::Base.connection.execute "DELETE FROM #{table_name}"
+      DbHelper.with_temp_table(table_name) do |temp_table_name|
         current_country_by_wca_id = Person.current.pluck(:wca_id, :countryId).to_h
         # Get all personal records (note: people that changed their country appear once for each country).
-        personal_records_with_event = ActiveRecord::Base.connection.execute <<-SQL
+        personal_records_with_event = ActiveRecord::Base.connection.execute <<-SQL.squish
           SELECT eventId, personId, countryId, continentId, min(#{field}) value
           FROM #{concise_table_name}
           GROUP BY personId, countryId, continentId, eventId
@@ -97,13 +96,19 @@ module AuxiliaryDataComputation
           end
           # Insert 500 rows at once to avoid running into too long query.
           values.each_slice(500) do |values_subset|
-            ActiveRecord::Base.connection.execute <<-SQL
-              INSERT INTO #{table_name} (personId, eventId, best, worldRank, continentRank, countryRank) VALUES
+            ActiveRecord::Base.connection.execute <<-SQL.squish
+              INSERT INTO #{temp_table_name} (personId, eventId, best, worldRank, continentRank, countryRank) VALUES
               #{values_subset.join(",\n")}
             SQL
           end
         end
       end
+    end
+  end
+
+  def self.insert_regional_records_lookup
+    DbHelper.with_temp_table("regional_records_lookup") do |temp_table_name|
+      CheckRegionalRecords.add_to_lookup_table(table_name: temp_table_name)
     end
   end
 end

@@ -3,17 +3,16 @@
 class ReassignWcaId
   include ActiveModel::Model
 
-  attr_reader :account1, :account2
-  attr_reader :account1_user, :account2_user
+  attr_reader :account1, :account2, :account1_user, :account2_user
 
   def account1=(account1)
     @account1 = account1
-    @account1_user = User.find_by_id(account1)
+    @account1_user = User.find_by(id: account1)
   end
 
   def account2=(account2)
     @account2 = account2
-    @account2_user = User.find_by_id(account2)
+    @account2_user = User.find_by(id: account2)
   end
 
   validates :account1, presence: true
@@ -72,9 +71,6 @@ class ReassignWcaId
     end
 
     ActiveRecord::Base.transaction do
-      # Update Team Positions
-      TeamMember.where(user_id: account1_user.id).update_all(user_id: account2_user.id)
-
       # Update Organized Competitions
       CompetitionOrganizer.where(organizer_id: account1_user.id).update_all(organizer_id: account2_user.id)
 
@@ -87,11 +83,13 @@ class ReassignWcaId
       # Update Competitions Announced By
       Competition.where(announced_by: account1_user.id).update_all(announced_by: account2_user.id)
 
-      # Update WCA ID and Delegate Status (Users table fields)
+      # Update roles
+      UserRole.where(user_id: account1_user.id).update_all(user_id: account2_user.id)
+
+      # Update WCA ID
       wca_id = account1_user.wca_id
-      delegate_status = account1_user.delegate_status
-      User.where(id: account1_user.id).update_all(wca_id: nil, delegate_status: nil) # Must remove WCA ID before adding it as it is unique in the Users table
-      User.where(id: account2_user.id).update_all(wca_id: wca_id, delegate_status: delegate_status)
+      User.where(id: account1_user.id).update_all(wca_id: nil) # Must remove WCA ID before adding it as it is unique in the Users table
+      User.where(id: account2_user.id).update_all(wca_id: wca_id)
     end
 
     true

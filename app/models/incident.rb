@@ -10,7 +10,7 @@ class Incident < ApplicationRecord
   scope :resolved, -> { where.not(resolved_at: nil) }
 
   validate :digest_sent_at_consistent
-  validates_presence_of :title
+  validates :title, presence: true
 
   include Taggable
 
@@ -76,10 +76,8 @@ class Incident < ApplicationRecord
       options = DEFAULT_PUBLIC_SERIALIZE_OPTIONS.merge(options || {})
     end
 
-    json = super(options)
-    json.merge!(
-      class: self.class.to_s.downcase,
-    )
+    json = super
+    json[:class] = self.class.to_s.downcase
 
     json[:tags] = tags_array.map { |tag|
       { name: tag }.merge(Regulation.find_or_nil(tag) || {})

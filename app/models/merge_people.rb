@@ -3,17 +3,16 @@
 class MergePeople
   include ActiveModel::Model
 
-  attr_reader :person1_wca_id, :person2_wca_id
-  attr_reader :person1, :person2
+  attr_reader :person1_wca_id, :person2_wca_id, :person1, :person2
 
   def person1_wca_id=(wca_id)
     @person1_wca_id = wca_id
-    @person1 = Person.find_by_wca_id(person1_wca_id)
+    @person1 = Person.find_by(wca_id: person1_wca_id)
   end
 
   def person2_wca_id=(wca_id)
     @person2_wca_id = wca_id
-    @person2 = Person.find_by_wca_id(person2_wca_id)
+    @person2 = Person.find_by(wca_id: person2_wca_id)
   end
 
   validates :person1_wca_id, presence: true
@@ -62,6 +61,15 @@ class MergePeople
   def person2_must_not_have_associated_user
     if @person2&.user
       errors.add(:person2_wca_id, "Must not have an account")
+    end
+  end
+
+  validate :person2_year_must_not_be_earlier
+  def person2_year_must_not_be_earlier
+    year1 = person1_wca_id[0, 4].to_i
+    year2 = person2_wca_id[0, 4].to_i
+    if year2 < year1
+      errors.add(:person2_wca_id, "WCA ID year cannot be earlier than person1's WCA ID year")
     end
   end
 

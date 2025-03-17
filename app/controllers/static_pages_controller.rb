@@ -3,13 +3,6 @@
 class StaticPagesController < ApplicationController
   include DocumentsHelper
 
-  before_action :current_user_can_admin_finances!, only: [:panel_wfc]
-  private def current_user_can_admin_finances!
-    unless current_user.can_admin_finances?
-      render json: {}, status: 401
-    end
-  end
-
   def home
   end
 
@@ -19,10 +12,7 @@ class StaticPagesController < ApplicationController
   def logo
   end
 
-  def wca_workbook_assistant
-  end
-
-  def wca_workbook_assistant_versions
+  def api_help
   end
 
   def robots

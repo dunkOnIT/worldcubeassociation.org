@@ -6,7 +6,7 @@ RSpec.describe "Competition WCIF" do
   let!(:competition) {
     FactoryBot.create(
       :competition,
-      :with_delegate,
+      :visible,
       :with_competitor_limit,
       id: "TestComp2014",
       name: "Test Comp 2014",
@@ -14,7 +14,6 @@ RSpec.describe "Competition WCIF" do
       start_date: "2014-02-03",
       end_date: "2014-02-05",
       external_website: "http://example.com",
-      showAtAll: true,
       event_ids: %w(333 444 333fm 333mbf),
       with_schedule: true,
       competitor_limit: 50,
@@ -22,7 +21,15 @@ RSpec.describe "Competition WCIF" do
       registration_close: "2013-12-31",
     )
   }
-  let(:partner_competition) { FactoryBot.create(:competition, :with_delegate, id: "PartnerComp2014", series_base: competition, series_distance_days: 3, showAtAll: true) }
+  let(:partner_competition) {
+    FactoryBot.create(
+      :competition,
+      :visible,
+      id: "PartnerComp2014",
+      series_base: competition,
+      series_distance_days: 3,
+    )
+  }
   let!(:competition_series) {
     FactoryBot.create(
       :competition_series,
@@ -33,6 +40,7 @@ RSpec.describe "Competition WCIF" do
     )
   }
   let(:delegate) { competition.delegates.first }
+  let(:organizer) { competition.organizers.first }
   let(:sixty_second_2_attempt_cutoff) { Cutoff.new(number_of_attempts: 2, attempt_result: 1.minute.in_centiseconds) }
   let(:top_16_advance) { AdvancementConditions::RankingCondition.new(16) }
   let!(:round333_1) { FactoryBot.create(:round, competition: competition, event_id: "333", number: 1, cutoff: sixty_second_2_attempt_cutoff, advancement_condition: top_16_advance, scramble_set_count: 16, total_number_of_rounds: 2) }
@@ -41,6 +49,7 @@ RSpec.describe "Competition WCIF" do
   let!(:round333fm_1) { FactoryBot.create(:round, competition: competition, event_id: "333fm", number: 1, format_id: "m") }
   let!(:round333mbf_1) { FactoryBot.create(:round, competition: competition, event_id: "333mbf", number: 1, format_id: "3") }
   let!(:round333mbf_1_extension) { round333mbf_1.wcif_extensions.create!(extension_id: "com.third.party", spec_url: "https://example.com", data: { "tables" => 5 }) }
+
   before :each do
     # Load all the rounds we just created.
     competition.reload
@@ -59,7 +68,7 @@ RSpec.describe "Competition WCIF" do
           "shortName" => "Spectacular 2014",
           "competitionIds" => %w[TestComp2014 PartnerComp2014],
         },
-        "persons" => [delegate.to_wcif(competition)],
+        "persons" => [organizer.to_wcif(competition), delegate.to_wcif(competition)],
         "events" => [
           {
             "id" => "333",
@@ -276,7 +285,7 @@ RSpec.describe "Competition WCIF" do
     it "rendered WCIF matches JSON Schema definition" do
       expect {
         JSON::Validator.validate!(Competition.wcif_json_schema, competition.to_wcif)
-      }.to_not raise_error
+      }.not_to raise_error
     end
   end
 
@@ -288,7 +297,7 @@ RSpec.describe "Competition WCIF" do
 
       competition.set_wcif_competitor_limit!(competitor_limit_wcif, delegate)
 
-      expect(competition.competitor_limit_enabled?).to eq(true)
+      expect(competition.competitor_limit_enabled?).to be(true)
       expect(competition.to_wcif["competitorLimit"]).to eq(competitor_limit_wcif)
     end
 

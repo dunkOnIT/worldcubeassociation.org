@@ -52,17 +52,18 @@ class Post < ApplicationRecord
     Rails.application.routes.url_helpers.post_path(slug)
   end
 
+  def author_name
+    author&.name
+  end
+
   DEFAULT_SERIALIZE_OPTIONS = {
     only: ["id", "slug", "title", "sticky", "created_at"],
-    methods: ["url"],
-    include: ["author"],
+    methods: ["url", "author_name"],
   }.freeze
 
   def serializable_hash(options = nil)
     json = super(DEFAULT_SERIALIZE_OPTIONS.merge(options || {}))
-    json.merge!(
-      class: self.class.to_s.downcase,
-    )
+    json[:class] = self.class.to_s.downcase
     if options[:teaser_only]
       json[:teaser] = md(body_teaser)
     else

@@ -24,8 +24,7 @@ class CompetitionsController < ApplicationController
   ]
   before_action -> { redirect_to_root_unless_user(:can_admin_competitions?) }, only: [
     :admin_edit,
-    :disconnect_stripe,
-    :disconnect_paypal,
+    :disconnect_payment_integration,
   ]
   before_action -> { redirect_to_root_unless_user(:can_admin_results?) }, only: [
     :post_results,
@@ -40,7 +39,7 @@ class CompetitionsController < ApplicationController
     :edit,
     :edit_events,
     :edit_schedule,
-    :payment_setup,
+    :payment_integration_setup,
   ]
 
   rescue_from WcaExceptions::ApiException do |e|
@@ -55,8 +54,8 @@ class CompetitionsController < ApplicationController
     }
   end
 
-  private def require_user_permission(action, *args, is_message: false)
-    permission_result = current_user&.send(action, *args)
+  private def require_user_permission(action, *, is_message: false)
+    permission_result = current_user&.send(action, *)
 
     if is_message && permission_result
       return render status: :forbidden, json: { error: permission_result }
@@ -88,127 +87,9 @@ class CompetitionsController < ApplicationController
     competition.editing_user_id = current_user&.id
   end
 
-  # Normalizes the params that old links to index still work.
-  private def support_old_links!
-    params[:display].downcase! if params[:display] # 'List' -> 'list', 'Map' -> 'map'
-
-    if params[:years] == "all"
-      params[:state] = "past"
-      params[:year] = "all years"
-    elsif params[:years].to_i >= Date.today.year # to_i: 'If there is not a valid number at the start of str, 0 is returned.' - RubyDoc
-      params[:state] = "past"
-      params[:year] = params[:years]
-    end
-    params[:years] = nil
-  end
-
   # Rubocop is unhappy about all the things we do in this controller action,
   # which is understandable.
   def index
-    support_old_links!
-
-    # Default params
-    params[:event_ids] ||= []
-    params[:region] ||= "all"
-    unless %w(past present recent by_announcement custom).include? params[:state]
-      params[:state] = "present"
-    end
-    params[:year] ||= "all years"
-    params[:status] ||= "all"
-    @display = %w(list map admin).include?(params[:display]) ? params[:display] : "list"
-
-    # Facebook adds indices to the params automatically when redirecting.
-    # See: https://github.com/thewca/worldcubeassociation.org/issues/472
-    if params[:event_ids].is_a?(ActionController::Parameters)
-      params[:event_ids] = params[:event_ids].values
-    end
-
-    @past_selected = params[:state] == "past"
-    @present_selected = params[:state] == "present"
-    @recent_selected = params[:state] == "recent"
-    @by_announcement_selected = params[:state] == "by_announcement"
-    @custom_selected = params[:state] == "custom"
-    @show_cancelled = params[:show_cancelled] == "on"
-    @show_registration_status = params[:show_registration_status] == "on"
-
-    @years = ["all years"] + Competition.non_future_years
-
-    if params[:delegate].present?
-      delegate = User.find(params[:delegate])
-      @competitions = delegate.delegated_competitions
-    else
-      @competitions = Competition
-    end
-
-    unless @show_cancelled
-      @competitions = @competitions.not_cancelled
-    end
-
-    @competitions = @competitions.includes(:country).where(showAtAll: true)
-    @competitions = if @by_announcement_selected
-                      @competitions.order_by_announcement_date
-                    else
-                      @competitions.order_by_date
-                    end
-
-    if @present_selected || @by_announcement_selected
-      @competitions = @competitions.not_over
-    elsif @recent_selected
-      @competitions = @competitions.where("end_date between ? and ?", (Date.today - Competition::RECENT_DAYS), Date.today).reverse_order
-    elsif @custom_selected
-      from_date = Date.safe_parse(params[:from_date])
-      to_date = Date.safe_parse(params[:to_date])
-      if from_date || to_date
-        @competitions = @competitions.where("start_date <= ?", to_date) if to_date
-        @competitions = @competitions.where("end_date >= ?", from_date) if from_date
-      else
-        @competitions = Competition.none
-      end
-    else
-      @competitions = @competitions.where("end_date < ?", Date.today).reverse_order
-      unless params[:year] == "all years"
-        @competitions = @competitions.where("YEAR(start_date) = :comp_year", comp_year: params[:year])
-      end
-    end
-
-    if @display == 'admin'
-      @competitions = @competitions.includes(:delegates, :delegate_report)
-    end
-
-    unless params[:region] == "all"
-      @competitions = @competitions.belongs_to_region(params[:region])
-    end
-
-    if params[:search].present?
-      params[:search].split.each do |part|
-        @competitions = @competitions.contains(part)
-      end
-    end
-
-    unless params[:event_ids].empty?
-      params[:event_ids].each do |event_id|
-        @competitions = @competitions.has_event(event_id)
-      end
-    end
-
-    unless params[:status] == "all"
-      days = (params[:status] == "warning" ? Competition::REPORT_AND_RESULTS_DAYS_WARNING : Competition::REPORT_AND_RESULTS_DAYS_DANGER)
-      @competitions = @competitions.select { |competition| competition.pending_results_or_report(days) }
-    end
-
-    @enable_react = params[:beta]&.to_s == '0xDbOverload'
-
-    respond_to do |format|
-      format.html {}
-      format.js do
-        # We change the browser's history when replacing url after an Ajax request.
-        # So we must prevent a browser from caching the JavaScript response.
-        # It's necessary because if the browser caches the response, the user will see a JavaScript response
-        # when he clicks browser back/forward buttons.
-        response.headers["Cache-Control"] = "no-cache, no-store"
-        render 'index', locals: { current_path: request.original_fullpath }
-      end
-    end
   end
 
   def post_results
@@ -259,7 +140,7 @@ class CompetitionsController < ApplicationController
   end
 
   def get_nearby_competitions(competition)
-    nearby_competitions = competition.nearby_competitions_warning.to_a[0, 10]
+    nearby_competitions = competition.nearby_competitions_danger.to_a[0, 10]
     nearby_competitions.select!(&:confirmed?) unless current_user.can_view_hidden_competitions?
     nearby_competitions
   end
@@ -274,6 +155,62 @@ class CompetitionsController < ApplicationController
     colliding_registration_start_competitions = competition.colliding_registration_start_competitions.to_a
     colliding_registration_start_competitions.select!(&:confirmed?) unless current_user.can_view_hidden_competitions?
     colliding_registration_start_competitions
+  end
+
+  def show
+    associations = {
+      competition_venues: {
+        venue_rooms: [:schedule_activities],
+      },
+      # FIXME: this part is triggerred by the competition menu generator when generating the psychsheet event list, should we care?
+      competition_events: {
+        # NOTE: we hit this association through competition.has_fees?, which then calls 'has_fee?' on each competition_event, which then use the competition to get the currency.
+        competition: [],
+        event: [],
+        # NOTE: we eventually hit the rounds->competition->competition_event in the TimeLimit 'to_s' method when having cumulative limit across rounds
+        rounds: {
+          competition: { rounds: [:competition_event] },
+          competition_event: [],
+        },
+      },
+      rounds: {
+        # Used by TimeLimit, but this is a weird includes...
+        competition: { rounds: [:competition_event] },
+      },
+    }
+    @competition = competition_from_params(includes: associations)
+    respond_to do |format|
+      format.html do
+      end
+      format.pdf do
+        unless @competition.has_schedule?
+          flash[:danger] = t('.no_schedule')
+          return redirect_to competition_path(@competition)
+        end
+        @colored_schedule = params.key?(:with_colors)
+        # Manually cache the pdf on:
+        #   - competiton.updated_at (touched by any change through WCIF)
+        #   - locale
+        #   - color or n&b
+        # We have a scheduled job to clear out old files
+        cached_path = helpers.path_to_cached_pdf(@competition, @colored_schedule)
+        begin
+          File.open(cached_path) do |f|
+            send_data f.read, filename: "#{helpers.pdf_name(@competition)}.pdf",
+                              type: "application/pdf", disposition: "inline"
+          end
+        rescue Errno::ENOENT
+          # This exception occurs when the file doesn't exist: let's create it!
+          helpers.create_pdfs_directory
+          render pdf: helpers.pdf_name(@competition), orientation: "Landscape",
+                 save_to_file: cached_path, disposition: "inline"
+        end
+      end
+      format.ics do
+        calendar = @competition.to_ics
+        render plain: calendar.to_ical, content_type: 'text/calendar'
+      end
+    end
   end
 
   def new
@@ -301,106 +238,88 @@ class CompetitionsController < ApplicationController
     render :edit
   end
 
-  # TODO: Refactor for cleaner integration of Stripe and Paypal (and other payment services)
-  def payment_setup
-    @competition = competition_from_params(includes: CHECK_SCHEDULE_ASSOCIATIONS)
+  def payment_integration_setup
+    @competition = competition_from_params
 
-    # Stripe setup URL
-    client = create_stripe_oauth_client
-    oauth_params = {
-      scope: 'read_write',
-      redirect_uri: EnvConfig.ROOT_URL + competitions_stripe_connect_path,
-      state: @competition.id,
-    }
-    @authorize_url = client.auth_code.authorize_url(oauth_params)
+    not_connected_integrations = CompetitionPaymentIntegration::AVAILABLE_INTEGRATIONS.keys - @competition.connected_payment_integration_types
 
-    # Paypal setup URL
-    # TODO: Don't generate this URL if there is already a connected paypal account?
-    @paypal_onboarding_url = PaypalInterface.generate_paypal_onboarding_link(@competition.id) unless Rails.env.production?
+    @cpi_onboarding_urls = not_connected_integrations.index_with do |cpi_type|
+      connector = CompetitionPaymentIntegration::AVAILABLE_INTEGRATIONS[cpi_type].safe_constantize
+      connector&.generate_onboarding_link(@competition.id)
+    end
   end
 
-  def paypal_return
-    if Rails.env.production?
-      flash[:error] = 'PayPal is not yet available in production environments'
-      return redirect_to competitions_payment_setup_path(@competition)
+  def connect_payment_integration
+    competition = competition_from_params
+    payment_integration = params.require(:payment_integration)
+
+    unless current_user&.can_manage_competition?(competition)
+      raise ActionController::RoutingError.new('Not Found')
     end
 
-    competition = competition_from_params
+    if payment_integration == 'paypal' && PaypalInterface.paypal_disabled?
+      flash[:error] = 'PayPal is not yet available in production environments'
+      return redirect_to competitions_payment_setup_path(competition)
+    end
 
-    account_reference = ConnectedPaypalAccount.new(
-      paypal_merchant_id: params[:merchantIdInPayPal],
-      permissions_granted: params[:permissionsGranted],
-      account_status: params[:accountStatus],
-      consent_status: params[:consentStatus],
-    )
+    connector = CompetitionPaymentIntegration::AVAILABLE_INTEGRATIONS[payment_integration.to_sym].safe_constantize
+    account_reference = connector&.connect_account(params)
+
+    if account_reference.blank?
+      raise ActionController::RoutingError.new("Payment Integration #{payment_integration} not Found")
+    end
 
     competition.competition_payment_integrations.new(connected_account: account_reference)
 
     if competition.save
-      flash[:success] = t('payments.payment_setup.account_connected', provider: t('payments.payment_providers.paypal'))
+      flash[:success] = t('payments.payment_setup.account_connected', provider: t("payments.payment_providers.#{payment_integration}"))
     else
-      flash[:danger] = t('payments.payment_setup.account_not_connected', provider: t('payments.payment_providers.paypal'))
+      flash[:danger] = t('payments.payment_setup.account_not_connected', provider: t("payments.payment_providers.#{payment_integration}"))
     end
 
-    redirect_to competitions_payment_setup_path(@competition)
+    redirect_to competition_payment_integration_setup_path(competition)
   end
 
   def stripe_connect
-    code = params[:code]
-    competition = Competition.find(params[:state])
+    # Stripe is very strict about OAuth. We need to specify **hard-coded** return URLs in the Stripe Dashboard manually.
+    # This means that we cannot use the default connect path above, because that contains the competition ID in the URL
+    #   meaning that we cannot hard-code every CompetitionID in existence in the Stripe Dashboard.
+    # Luckily, Stripe _does_ allow to pass a "state" (which should normally be a CSRF token) that we can abuse to
+    #   transmit the competition ID instead. So we use this static URL for OAuth,
+    #   and then for code reuse we just redirect internally :)
+    competition_id = params.require(:state)
+    competition = Competition.find(competition_id)
+
     unless current_user&.can_manage_competition?(competition)
       raise ActionController::RoutingError.new('Not Found')
     end
-    client = create_stripe_oauth_client
-    resp = client.auth_code.get_token(code, params: { scope: 'read_write' })
-    stripe_account = ConnectedStripeAccount.new(account_id: resp.params['stripe_user_id'])
-    competition.competition_payment_integrations.new(connected_account: stripe_account)
-    if competition.save
-      flash[:success] = t('payments.payment_setup.account_connected', provider: t('payments.payment_providers.stripe'))
-    else
-      flash[:danger] = t('payments.payment_setup.account_not_connected', provider: t('payments.payment_providers.stripe'))
-    end
-    redirect_to competitions_payment_setup_path(competition)
+
+    redirect_to competition_connect_payment_integration_path(
+      competition_id,
+      payment_integration: :stripe,
+      # see https://docs.stripe.com/connect/oauth-reference#get-authorize-response
+      params: params.permit(:code, :scope, :state),
+    )
   end
 
-  private def create_stripe_oauth_client
-    options = {
-      site: 'https://connect.stripe.com',
-      authorize_url: '/oauth/authorize',
-      token_url: '/oauth/token',
-      auth_scheme: :request_body,
-    }
+  def disconnect_payment_integration
+    competition = competition_from_params
+    payment_integration = params.require(:payment_integration)
 
-    OAuth2::Client.new(AppSecrets.STRIPE_CLIENT_ID, AppSecrets.STRIPE_API_KEY, options)
-  end
-
-  def disconnect_paypal
-    if Rails.env.production?
+    if payment_integration == "paypal" && PaypalInterface.paypal_disabled?
       flash[:error] = 'PayPal is not yet available in production environments'
       return redirect_to root_url
     end
 
-    competition = competition_from_params
-    competition.disconnect_payment_integration(:paypal)
+    competition.disconnect_payment_integration(payment_integration.to_sym)
 
-    if competition.paypal_connected?
-      flash[:danger] = t('payments.payment_setup.account_disconnected_failure', provider: t('payments.payment_providers.paypal'))
+    if competition.payment_integration_connected?(payment_integration.to_sym)
+      flash[:danger] = t('payments.payment_setup.account_disconnected_failure', provider: t("payments.payment_providers.#{payment_integration}"))
     else
-      flash[:success] = t('payments.payment_setup.account_disconnected_success', provider: t('payments.payment_providers.paypal'))
+      flash[:success] = t('payments.payment_setup.account_disconnected_success', provider: t("payments.payment_providers.#{payment_integration}"))
     end
-    redirect_to competitions_payment_setup_path(@competition)
-  end
 
-  def disconnect_stripe
-    competition = competition_from_params
-    competition.disconnect_payment_integration(:stripe)
-
-    if competition.stripe_connected?
-      flash[:danger] = t('payments.payment_setup.account_disconnected_failure', provider: t('payments.payment_providers.stripe'))
-    else
-      flash[:success] = t('payments.payment_setup.account_disconnected_success', provider: t('payments.payment_providers.stripe'))
-    end
-    redirect_to competitions_payment_setup_path(competition)
+    redirect_to competition_payment_integration_setup_path(competition)
   end
 
   def clone_competition
@@ -412,7 +331,7 @@ class CompetitionsController < ApplicationController
 
   def competition_form_nearby_json(competition, other_comp)
     if current_user.can_admin_results?
-      comp_link = ActionController::Base.helpers.link_to(other_comp.name, competition_admin_edit_path(other_comp.id), target: "_blank")
+      comp_link = ActionController::Base.helpers.link_to(other_comp.name, competition_admin_edit_path(other_comp.id), target: "_blank", rel: "noopener")
     else
       comp_link = ActionController::Base.helpers.link_to(other_comp.name, competition_path(other_comp.id))
     end
@@ -475,7 +394,7 @@ class CompetitionsController < ApplicationController
 
   def competition_form_registration_collision_json(competition, other_comp)
     if current_user.can_admin_results?
-      comp_link = ActionController::Base.helpers.link_to(other_comp.name, competition_admin_edit_path(other_comp.id), target: "_blank")
+      comp_link = ActionController::Base.helpers.link_to(other_comp.name, competition_admin_edit_path(other_comp.id), target: "_blank", rel: "noopener")
     else
       comp_link = ActionController::Base.helpers.link_to(other_comp.name, competition_path(other_comp.id))
     end
@@ -507,69 +426,17 @@ class CompetitionsController < ApplicationController
   end
 
   def calculate_dues
-    country_iso2 = Country.find_by(id: params[:country_id])&.iso2
-    multiplier = ActiveRecord::Type::Boolean.new.cast(params[:competitor_limit_enabled]) ? params[:competitor_limit].to_i : 1
-    total_dues = DuesCalculator.dues_for_n_competitors(country_iso2, params[:base_entry_fee_lowest_denomination].to_i, params[:currency_code], multiplier)
-    render json: {
-      dues_value: total_dues.present? ? total_dues.format : nil,
-    }
-  end
+    country_iso2 = Country.find_by(id: params[:countryId])&.iso2
+    per_competitor_dues = DuesCalculator.dues_per_competitor(
+      country_iso2,
+      params[:baseEntryFee].to_i,
+      params[:currencyCode],
+    )
+    per_competitor_dues_in_lowest_denomination = per_competitor_dues&.cents
 
-  def show
-    associations = {
-      competition_venues: {
-        venue_rooms: [:schedule_activities],
-      },
-      # FIXME: this part is triggerred by the competition menu generator when generating the psychsheet event list, should we care?
-      competition_events: {
-        # NOTE: we hit this association through competition.has_fees?, which then calls 'has_fee?' on each competition_event, which then use the competition to get the currency.
-        competition: [],
-        event: [],
-        # NOTE: we eventually hit the rounds->competition->competition_event in the TimeLimit 'to_s' method when having cumulative limit across rounds
-        rounds: {
-          competition: { rounds: [:competition_event] },
-          competition_event: [],
-        },
-      },
-      rounds: {
-        # Used by TimeLimit, but this is a weird includes...
-        competition: { rounds: [:competition_event] },
-      },
+    render json: {
+      dues_value: per_competitor_dues_in_lowest_denomination,
     }
-    @competition = competition_from_params(includes: associations)
-    respond_to do |format|
-      format.html do
-        return redirect_to competitions_v2_path(id: @competition.id) if @competition.uses_new_registration_service? && !@competition.results_posted?
-      end
-      format.pdf do
-        unless @competition.has_schedule?
-          flash[:danger] = t('.no_schedule')
-          return redirect_to competition_path(@competition)
-        end
-        @colored_schedule = params.key?(:with_colors)
-        # Manually cache the pdf on:
-        #   - competiton.updated_at (touched by any change through WCIF)
-        #   - locale
-        #   - color or n&b
-        # We have a scheduled job to clear out old files
-        cached_path = helpers.path_to_cached_pdf(@competition, @colored_schedule)
-        begin
-          File.open(cached_path) do |f|
-            send_data f.read, filename: "#{helpers.pdf_name(@competition)}.pdf",
-                              type: "application/pdf", disposition: "inline"
-          end
-        rescue Errno::ENOENT
-          # This exception occurs when the file doesn't exist: let's create it!
-          helpers.create_pdfs_directory
-          render pdf: helpers.pdf_name(@competition), orientation: "Landscape",
-                 save_to_file: cached_path, disposition: "inline"
-        end
-      end
-      format.ics do
-        calendar = @competition.to_ics
-        render plain: calendar.to_ical, content_type: 'text/calendar'
-      end
-    end
   end
 
   def show_podiums
@@ -603,24 +470,12 @@ class CompetitionsController < ApplicationController
 
   def unbookmark
     @competition = competition_from_params
-    BookmarkedCompetition.where(competition: @competition, user: current_user).each(&:destroy!)
+    BookmarkedCompetition.where(competition: @competition, user: current_user).destroy_all
     Rails.cache.delete("#{current_user.id}-competitions-bookmarked")
     head :ok
   end
 
-  # Enables the New Registration Service for a Competition
-  def enable_v2
-    @competition = competition_from_params
-    if EnvConfig.WCA_LIVE_SITE? || @competition.registration_opened?
-      flash.now[:danger] = t('competitions.messages.cannot_activate_v2')
-      return redirect_to competition_path(@competition)
-    end
-    @competition.enable_v2_registrations!
-    redirect_to competitions_v2_path(@competition)
-  end
-
   before_action -> { require_user_permission(:can_create_competitions?) }, only: [:create]
-
   def create
     competition = Competition.new
 
@@ -711,7 +566,7 @@ class CompetitionsController < ApplicationController
         CompetitionsMailer.notify_organizer_of_removal_from_competition(current_user, competition, removed_organizer).deliver_later
       end
 
-      response_data = { status: "ok", message: t('competitions.update.save_success') }
+      response_data = { status: "ok", message: t('.save_success') }
 
       if persisted_id != competition.id
         response_data[:redirect] = competition_admin_view ? competition_admin_edit_path(competition) : edit_competition_path(competition)
@@ -801,7 +656,7 @@ class CompetitionsController < ApplicationController
       return render json: { error: "Already announced" }
     end
 
-    competition.update!(announced_at: Time.now, announced_by: current_user.id)
+    competition.update!(announced_at: Time.now, announced_by: current_user.id, showAtAll: true)
 
     competition.organizers.each do |organizer|
       CompetitionsMailer.notify_organizer_of_announced_competition(competition, organizer).deliver_later
@@ -868,21 +723,14 @@ class CompetitionsController < ApplicationController
   end
 
   def my_competitions
-    if Rails.env.production? && !EnvConfig.WCA_LIVE_SITE?
-      registrations_v2 = Microservices::Registrations.registrations_by_user(current_user.id)
-    else
-      registrations_v2 = []
-    end
-
     ActiveRecord::Base.connected_to(role: :read_replica) do
       competition_ids = current_user.organized_competitions.pluck(:competition_id)
       competition_ids.concat(current_user.delegated_competitions.pluck(:competition_id))
       registrations = current_user.registrations.includes(:competition).accepted.reject { |r| r.competition.results_posted? }
+      registrations.concat(current_user.registrations.includes(:competition).waitlisted.select { |r| r.competition.upcoming? })
       registrations.concat(current_user.registrations.includes(:competition).pending.select { |r| r.competition.upcoming? })
-      # Convert Registrations V2 to a format that the frontend can understand, for Competition, we only need the id.
-      registrations.concat(registrations_v2.map { |r| Microservices::Registrations.convert_registration(Struct.new(:id, keyword_init: true).new(id: r['competition_id']), current_user, r['status']) })
       @registered_for_by_competition_id = registrations.uniq.to_h do |r|
-        [r.competition.id, r]
+        [r.competition_id, r.competing_status]
       end
       competition_ids.concat(@registered_for_by_competition_id.keys)
       if current_user.person
@@ -891,7 +739,7 @@ class CompetitionsController < ApplicationController
       # An organiser might still have duties to perform for a cancelled competition until the date of the competition has passed.
       # For example, mailing all competitors about the cancellation.
       # In general ensuring ease of access until it is certain that they won't need to frequently visit the page anymore.
-      competitions = Competition.includes(:delegate_report, :delegates)
+      competitions = Competition.includes(:delegate_report, :championships)
                                 .where(id: competition_ids.uniq).where("cancelled_at is null or end_date >= curdate()")
                                 .sort_by { |comp| comp.start_date || (Date.today + 20.year) }.reverse
       @past_competitions, @not_past_competitions = competitions.partition(&:is_probably_over?)

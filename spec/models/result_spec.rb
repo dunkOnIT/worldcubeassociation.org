@@ -100,7 +100,7 @@ RSpec.describe Result do
 
           it "missing solves" do
             result = build_result(value1: 42, value2: 43, value3: 44, value4: 0, value5: 0, best: 42, average: 44)
-            expect(result.average_is_not_computable_reason).to eq nil
+            expect(result.average_is_not_computable_reason).to be nil
             expect(result.compute_correct_average).to eq 0
             expect(result).to be_invalid(average: ["should be 0"])
           end
@@ -362,21 +362,6 @@ RSpec.describe Result do
           end
         end
 
-        context "333ft" do
-          let(:formatId) { "3" }
-          let(:eventId) { "333ft" }
-          let!(:round) { FactoryBot.create(:round, competition: competition, event_id: "333ft", format_id: "3") }
-
-          it "does compute average" do
-            result = build_result(value1: 999, value2: 1000, value3: 1001, value4: 0, value5: 0, best: 999, average: 1000)
-            expect(result).to be_valid
-
-            result.average = 33
-            expect(result.compute_correct_average).to eq 1000
-            expect(result).to be_invalid_with_errors(average: ["should be 1000"])
-          end
-        end
-
         context "333mbf" do
           let(:formatId) { "3" }
           let(:eventId) { "333mbf" }
@@ -404,7 +389,7 @@ RSpec.describe Result do
       def result_with_n_solves(n, options)
         result = FactoryBot.build :result, options
         (1..5).each do |i|
-          result.send "value#{i}=", i <= n ? 42 : 0
+          result.send :"value#{i}=", i <= n ? 42 : 0
         end
         result
       end

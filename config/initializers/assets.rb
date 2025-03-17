@@ -10,16 +10,13 @@ Rails.application.config.assets.version = '1.0'
 # helper!
 # wicked_pdf's helpers can't handle "packs_with_chunks" and therefore cannot
 # properly inline our packs :(
-Rails.application.config.assets.paths << Rails.root.join("node_modules", "@cubing", "icons", "www", "css")
+Rails.application.config.assets.paths << Rails.root.join("node_modules/@cubing/icons/www/css")
 
 # Precompile additional assets.
 # application.js, application.css, and all non-JS/CSS in app/assets folder are already added.
 Rails.application.config.assets.precompile += %w(oms.js)
 Rails.application.config.assets.precompile += %w(email.css)
 Rails.application.config.assets.precompile += %w(pdf.css)
-Rails.application.config.assets.precompile += %w(fullcalendar/fullcalendar_wca.js)
-Rails.application.config.assets.precompile += %w(fullcalendar_wca.css)
 (I18n.available_locales - [:en]).each do |locale|
   Rails.application.config.assets.precompile += ["locales/#{locale.downcase}.js"]
-  Rails.application.config.assets.precompile += ["fullcalendar/locales/#{locale.downcase}.js"]
 end

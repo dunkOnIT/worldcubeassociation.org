@@ -4,6 +4,7 @@ require 'rails_helper'
 
 RSpec.describe User, type: :model do
   let(:dob_form_path) { Rails.application.routes.url_helpers.contact_dob_path }
+  let(:wrt_contact_path) { Rails.application.routes.url_helpers.contact_path(contactRecipient: 'wrt') }
 
   it "defines a valid user" do
     user = FactoryBot.create :user
@@ -65,19 +66,6 @@ RSpec.describe User, type: :model do
     user.confirm
   end
 
-  it "requires region_id for a delegate" do
-    delegate = FactoryBot.create :delegate
-    region_id = delegate.region_id
-    user = FactoryBot.create :user
-
-    delegate.region_id = user.region_id
-    expect(delegate).to be_invalid_with_errors(region_id: ["can't be blank"])
-
-    delegate.region_id = region_id
-    user.update(delegate_status: "delegate", region_id: region_id)
-    expect(delegate).to be_valid
-  end
-
   it "doesn't delete a real account when a dummy account's WCA ID is cleared" do
     # Create someone without a password and without a WCA ID. This simulates the kind
     # of accounts we originally created for all delegates without accounts.
@@ -133,7 +121,7 @@ RSpec.describe User, type: :model do
 
     it "does not allow assigning a genderless WCA ID to a user" do
       user.wca_id = genderless_person.wca_id
-      expect(user).to be_invalid_with_errors(wca_id: [I18n.t('users.errors.wca_id_no_gender_html')])
+      expect(user).to be_invalid_with_errors(wca_id: [I18n.t('users.errors.wca_id_no_gender_html', wrt_contact_path: wrt_contact_path)])
     end
 
     it "nullifies empty WCA IDs" do
@@ -167,15 +155,13 @@ RSpec.describe User, type: :model do
       dummy_user = FactoryBot.create :dummy_user
       person_for_dummy = dummy_user.person
       expect(dummy_user).to be_valid
-      dummy_user.update!(
-        avatar: File.open(Rails.root.join("spec/support/logo.jpg")),
-        avatar_crop_x: 40,
-        avatar_crop_y: 40,
-        avatar_crop_w: 40,
-        avatar_crop_h: 40,
+      dummy_avatar = FactoryBot.create(
+        :user_avatar,
+        user: dummy_user,
       )
-      avatar = dummy_user.reload.read_attribute(:avatar)
-      expect(dummy_user.avatar.file.path).to eq("uploads/user/avatar/#{dummy_user.wca_id}/#{avatar}")
+      expect(dummy_avatar).to be_valid
+      dummy_user.update!(current_avatar: dummy_avatar)
+      expect(dummy_user.avatar.filename).to eq(dummy_avatar.filename)
 
       # Assigning a WCA ID to user should copy over the name from the Persons table.
       expect(user.name).to eq user.person.name
@@ -184,9 +170,8 @@ RSpec.describe User, type: :model do
       expect(user.name).to eq person_for_dummy.name
 
       # Check that the dummy account was deleted, and we inherited its avatar.
-      expect(User.find_by_id(dummy_user.id)).to be_nil
-      expect(user.reload.read_attribute(:avatar)).to eq avatar
-      expect(dummy_user.avatar.file.path).to eq("uploads/user/avatar/#{dummy_user.wca_id}/#{avatar}")
+      expect(User.find_by(id: dummy_user.id)).to be_nil
+      expect(user.reload.avatar).to eq dummy_avatar
     end
 
     it "does not allow duplicate WCA IDs" do
@@ -213,89 +198,71 @@ RSpec.describe User, type: :model do
     FactoryBot.create :user, encrypted_password: ""
   end
 
-  it "saves crop coordinates" do
-    user = FactoryBot.create :user_with_wca_id
-
-    user.update!(
-      pending_avatar: File.open(Rails.root.join("spec/support/logo.jpg")),
-    )
-    expect(user.read_attribute(:pending_avatar)).not_to be_nil
-
-    user.update!(
-      pending_avatar_crop_x: 40,
-      pending_avatar_crop_y: 50,
-      pending_avatar_crop_w: 60,
-      pending_avatar_crop_h: 70,
-    )
-    expect(user.saved_pending_avatar_crop_x).to eq 40
-    expect(user.saved_pending_avatar_crop_y).to eq 50
-    expect(user.saved_pending_avatar_crop_w).to eq 60
-    expect(user.saved_pending_avatar_crop_h).to eq 70
-  end
-
   it "can handle missing avatar" do
     user = FactoryBot.create :user
-    user.avatar = nil
-    user.saved_avatar_crop_x = 40
-    user.saved_avatar_crop_y = 40
-    user.saved_avatar_crop_w = 40
-    user.saved_avatar_crop_h = 40
+    user.current_avatar = nil
     user.save!
   end
 
-  it "clearing avatar clears cropping area" do
-    user = FactoryBot.create :user_with_wca_id
-    user.update!(
-      avatar: File.open(Rails.root.join("spec/support/logo.jpg")),
-      avatar_crop_x: 40,
-      avatar_crop_y: 40,
-      avatar_crop_w: 40,
-      avatar_crop_h: 40,
-
-      pending_avatar: File.open(Rails.root.join("spec/support/logo.jpg")),
-      pending_avatar_crop_x: 40,
-      pending_avatar_crop_y: 40,
-      pending_avatar_crop_w: 40,
-      pending_avatar_crop_h: 40,
-    )
-    # Get rid of cached carrierwave-crop stuff by relooking up user
-    user = User.find(user.id)
-    user.remove_avatar = true
-    user.remove_pending_avatar = true
-    user.save!
-    expect(user.read_attribute(:avatar)).to be_nil
-    expect(user.read_attribute(:pending_avatar)).to be_nil
-    expect(user.saved_avatar_crop_x).to be_nil
-    expect(user.saved_avatar_crop_y).to be_nil
-    expect(user.saved_avatar_crop_w).to be_nil
-    expect(user.saved_avatar_crop_h).to be_nil
-    expect(user.saved_pending_avatar_crop_x).to be_nil
-    expect(user.saved_pending_avatar_crop_y).to be_nil
-    expect(user.saved_pending_avatar_crop_w).to be_nil
-    expect(user.saved_pending_avatar_crop_h).to be_nil
+  it "clearing avatar backfills nil on both fields" do
+    user = FactoryBot.create :user_with_wca_id, :with_avatar, :with_pending_avatar
+    expect(user.current_avatar).not_to be_nil
+    user.current_avatar.update!(status: 'deleted')
+    expect(user.current_avatar).to be_nil
+    expect(user.pending_avatar).not_to be_nil
+    user.pending_avatar.update!(status: 'deleted')
+    expect(user.pending_avatar).to be_nil
   end
 
-  it "approving pending avatar moves crop coordinates" do
-    user = FactoryBot.create :user_with_wca_id
-    user.update!(
-      pending_avatar: File.open(Rails.root.join("spec/support/logo.jpg")),
-      pending_avatar_crop_x: 40,
-      pending_avatar_crop_y: 50,
-      pending_avatar_crop_w: 60,
-      pending_avatar_crop_h: 70,
-    )
-    user.approve_pending_avatar!
-    expect(user.read_attribute(:avatar)).not_to be_nil
-    expect(user.saved_avatar_crop_x).to eq 40
-    expect(user.saved_avatar_crop_y).to eq 50
-    expect(user.saved_avatar_crop_w).to eq 60
-    expect(user.saved_avatar_crop_h).to eq 70
+  it "approving pending avatar moves association" do
+    user = FactoryBot.create :user_with_wca_id, :with_pending_avatar
+    user.pending_avatar.update!(status: 'approved')
 
-    expect(user.read_attribute(:pending_avatar)).to be_nil
-    expect(user.saved_pending_avatar_crop_x).to eq nil
-    expect(user.saved_pending_avatar_crop_y).to eq nil
-    expect(user.saved_pending_avatar_crop_w).to eq nil
-    expect(user.saved_pending_avatar_crop_h).to eq nil
+    expect(user.current_avatar).not_to be_nil
+    expect(user.pending_avatar).to be_nil
+  end
+
+  it "approving pending avatar triggers a removal job" do
+    user = FactoryBot.create :user_with_wca_id, :with_pending_avatar
+    avatar = user.pending_avatar
+
+    perform_enqueued_jobs do
+      avatar.update!(status: 'approved')
+    end
+
+    assert_performed_jobs 1, only: ActiveStorage::PurgeJob
+  end
+
+  it "approving pending avatar moves file from private to public" do
+    user = FactoryBot.create :user_with_wca_id, :with_pending_avatar
+    avatar = user.pending_avatar
+
+    expect(avatar.public_image.attached?).to be false
+    expect(avatar.private_image.attached?).to be true
+
+    avatar.update!(status: 'approved')
+
+    # Make sure we actually purge the file
+    perform_enqueued_jobs
+
+    expect(avatar.public_image.attached?).to be true
+    expect(avatar.private_image.attached?).to be false
+  end
+
+  it "deprecating approved avatar moves file from public to private" do
+    user = FactoryBot.create :user_with_wca_id, :with_avatar
+    avatar = user.current_avatar
+
+    expect(avatar.public_image.attached?).to be true
+    expect(avatar.private_image.attached?).to be false
+
+    avatar.update!(status: 'deprecated')
+
+    # Make sure we actually purge the file
+    perform_enqueued_jobs
+
+    expect(avatar.public_image.attached?).to be false
+    expect(avatar.private_image.attached?).to be true
   end
 
   describe "#delegated_competitions" do
@@ -336,10 +303,10 @@ RSpec.describe User, type: :model do
 
   describe "unconfirmed_wca_id" do
     let!(:person) { FactoryBot.create :person, dob: '1990-01-02' }
-    let!(:delegate) { FactoryBot.create :delegate, region_id: (FactoryBot.create :delegate_region_americas).id }
+    let!(:delegate_role) { FactoryBot.create :delegate_role }
     let!(:user) do
       FactoryBot.create(:user, unconfirmed_wca_id: person.wca_id,
-                               delegate_id_to_handle_wca_id_claim: delegate.id,
+                               delegate_id_to_handle_wca_id_claim: delegate_role.user.id,
                                claiming_wca_id: true,
                                dob_verification: "1990-01-2")
     end
@@ -393,7 +360,7 @@ RSpec.describe User, type: :model do
     it "does not allow claiming wca id Person without gender" do
       user.unconfirmed_wca_id = person_without_gender.wca_id
       user.dob_verification = "1234-04-03"
-      expect(user).to be_invalid_with_errors(gender: [I18n.t('users.errors.wca_id_no_gender_html')])
+      expect(user).to be_invalid_with_errors(gender: [I18n.t('users.errors.wca_id_no_gender_html', wrt_contact_path: wrt_contact_path)])
     end
 
     it "does not show a message about incorrect dob for people who have already claimed their wca id" do
@@ -442,7 +409,7 @@ RSpec.describe User, type: :model do
 
     it "can match a wca id already claimed by a user" do
       user2 = FactoryBot.create :user
-      user2.delegate_id_to_handle_wca_id_claim = delegate.id
+      user2.delegate_id_to_handle_wca_id_claim = delegate_role.user.id
 
       user2.unconfirmed_wca_id = person.wca_id
       user2.dob_verification = person.dob.strftime("%F")
@@ -456,45 +423,33 @@ RSpec.describe User, type: :model do
     it "cannot have an unconfirmed_wca_id if you already have a wca_id" do
       user_with_wca_id.claiming_wca_id = true
       user_with_wca_id.unconfirmed_wca_id = person.wca_id
-      user_with_wca_id.delegate_id_to_handle_wca_id_claim = delegate.id
+      user_with_wca_id.delegate_id_to_handle_wca_id_claim = delegate_role.user.id
       expect(user_with_wca_id).to be_invalid_with_errors(unconfirmed_wca_id: ["cannot claim a WCA ID because you already have WCA ID #{user_with_wca_id.wca_id}"])
     end
 
     it "when empty, is set to nil" do
       user = FactoryBot.create :user, unconfirmed_wca_id: nil
       user.update! unconfirmed_wca_id: ""
-      expect(user.reload.unconfirmed_wca_id).to eq nil
+      expect(user.reload.unconfirmed_wca_id).to be nil
     end
   end
 
-  it "#teams and #current_teams return unique team names" do
-    user = FactoryBot.create(:user)
+  it 'banned? returns true for users who are actively banned' do
+    banned_user = FactoryBot.create :user, :banned
 
-    FactoryBot.create(:team_member, team_id: Team.wrc.id, user_id: user.id, start_date: Date.today - 20, end_date: Date.today - 10)
-    FactoryBot.create(:team_member, team_id: Team.wrt.id, user_id: user.id, start_date: Date.today - 5, end_date: Date.today + 5)
-    FactoryBot.create(:team_member, team_id: Team.wrt.id, user_id: user.id, start_date: Date.today + 6, end_date: Date.today + 10)
-
-    expect(user.teams).to match_array [Team.wrc, Team.wrt]
-    expect(user.current_teams).to match_array [Team.wrt]
+    expect(banned_user.banned?).to be true
   end
 
-  it 'former members of the results team are not considered current members' do
-    wrt_member = FactoryBot.create :user, :wrt_member
-    team_member = wrt_member.team_members.first
-    team_member.update!(end_date: 1.day.ago)
+  it 'banned? returns false for users who are banned in past' do
+    formerly_banned_user = FactoryBot.create :user, :formerly_banned
 
-    expect(wrt_member.reload.team_member?(Team.wrt)).to eq false
+    expect(formerly_banned_user.banned?).to be false
   end
 
-  it 'former leaders of the results team are not considered current leaders' do
-    wrt_leader = FactoryBot.create :user, :wrt_member
-    team_member = wrt_leader.team_members.first
-    team_member.update!(team_leader: true)
-    team_member.update!(end_date: 1.day.ago)
+  it 'current_ban returns data of current banned role' do
+    banned_user = FactoryBot.create :user, :banned
 
-    expect(wrt_leader.reload.team_leader?(Team.wrt)).to eq false
-
-    expect(wrt_leader.teams_where_is_leader.count).to eq 0
+    expect(banned_user.current_ban.group.group_type).to eq UserGroup.group_types[:banned_competitors]
   end
 
   it "removes whitespace around names" do
@@ -517,12 +472,12 @@ RSpec.describe User, type: :model do
 
       it "updates the password if the password_confirmation matches" do
         user.update(password: "new", password_confirmation: "new")
-        expect(user.reload.valid_password?("new")).to eq true
+        expect(user.reload.valid_password?("new")).to be true
       end
 
       it "does not update the password if the password_confirmation does not match" do
         user.update(password: "new", password_confirmation: "wrong")
-        expect(user.reload.valid_password?("new")).to eq false
+        expect(user.reload.valid_password?("new")).to be false
       end
 
       it "does not allow blank password" do
@@ -543,7 +498,7 @@ RSpec.describe User, type: :model do
 
     it "doesn't send the notification if the user has it disabled" do
       user = FactoryBot.build(:user_with_wca_id, results_notifications_enabled: false)
-      expect(CompetitionsMailer).to_not receive(:notify_users_of_results_presence).with(user, competition).and_call_original
+      expect(CompetitionsMailer).not_to receive(:notify_users_of_results_presence).with(user, competition).and_call_original
       user.notify_of_results_posted(competition)
     end
   end
@@ -553,17 +508,17 @@ RSpec.describe User, type: :model do
 
     it "returns false if the user is an organizer of an upcoming comp using registration system" do
       organizer = competition.organizers.first
-      expect(organizer.can_view_all_users?).to eq false
+      expect(organizer.can_view_all_users?).to be false
     end
 
     it "returns true for board" do
       board_member = FactoryBot.create :user, :board_member
-      expect(board_member.can_view_all_users?).to eq true
+      expect(board_member.can_view_all_users?).to be true
     end
 
     it "returns false for normal user" do
       normal_user = FactoryBot.create :user
-      expect(normal_user.can_view_all_users?).to eq false
+      expect(normal_user.can_view_all_users?).to be false
     end
   end
 
@@ -572,12 +527,12 @@ RSpec.describe User, type: :model do
 
     it "returns true for board" do
       board_member = FactoryBot.create :user, :board_member
-      expect(board_member.can_edit_user?(user)).to eq true
+      expect(board_member.can_edit_user?(user)).to be true
     end
 
     it "returns false for normal user" do
       normal_user = FactoryBot.create :user
-      expect(normal_user.can_edit_user?(user)).to eq false
+      expect(normal_user.can_edit_user?(user)).to be false
     end
   end
 
@@ -585,16 +540,16 @@ RSpec.describe User, type: :model do
     let(:competition) { FactoryBot.create(:competition, :registration_open, :with_organizer, starts: 1.month.from_now) }
     let(:registration) { FactoryBot.create(:registration, :newcomer, competition: competition) }
 
-    it "allows organizers of upcoming competitions to edit newcomer names" do
+    it "allows organizers of upcoming competitions to edit first-timer names" do
       organizer = competition.organizers.first
-      expect(organizer.can_edit_user?(registration.user)).to eq true
+      expect(organizer.can_edit_user?(registration.user)).to be true
       expect(organizer.editable_fields_of_user(registration.user).to_a).to eq [:name]
     end
 
     it "disallows delegates to edit WCA IDs of special accounts" do
       board_member = FactoryBot.create :user, :board_member
       delegate = FactoryBot.create :delegate
-      expect(delegate.can_edit_user?(board_member)).to eq true
+      expect(delegate.can_edit_user?(board_member)).to be true
       expect(delegate.editable_fields_of_user(board_member).to_a).not_to include(:wca_id)
     end
   end
@@ -602,19 +557,19 @@ RSpec.describe User, type: :model do
   describe "#is_special_account" do
     it "returns false for a normal user" do
       user = FactoryBot.create :user
-      expect(user.is_special_account?).to eq false
+      expect(user.is_special_account?).to be false
     end
 
     it "returns true for users on a team" do
       board_member = FactoryBot.create :user, :board_member
       banned_person = FactoryBot.create :user, :banned
-      expect(board_member.is_special_account?).to eq true
-      expect(banned_person.is_special_account?).to eq true
+      expect(board_member.is_special_account?).to be true
+      expect(banned_person.is_special_account?).to be true
     end
 
     it "returns true for users that are delegates" do
       senior_delegate_role = FactoryBot.create :senior_delegate_role
-      expect(senior_delegate_role.user.is_special_account?).to eq true
+      expect(senior_delegate_role.user.is_special_account?).to be true
     end
 
     it "returns true for users who organized or delegated a competition" do
@@ -622,9 +577,9 @@ RSpec.describe User, type: :model do
       delegate = FactoryBot.create :user # Intentionally not assigning a Delegate role as it is possible to Delegate a competition without being a current Delegate
       trainee_delegate = FactoryBot.create :user
       FactoryBot.create :competition, organizers: [organizer], delegates: [delegate, trainee_delegate]
-      expect(organizer.is_special_account?).to eq true
-      expect(delegate.is_special_account?).to eq true
-      expect(trainee_delegate.is_special_account?).to eq true
+      expect(organizer.is_special_account?).to be true
+      expect(delegate.is_special_account?).to be true
+      expect(trainee_delegate.is_special_account?).to be true
     end
   end
 
@@ -643,18 +598,20 @@ RSpec.describe User, type: :model do
   end
 
   describe "receive_delegate_reports field" do
-    let!(:staff_member1) { FactoryBot.create :user, :wec_member, receive_delegate_reports: true }
+    let!(:staff_member1) { FactoryBot.create :user, :wic_member, receive_delegate_reports: true }
     let!(:staff_member2) { FactoryBot.create :user, :wrt_member, receive_delegate_reports: false }
+    let!(:staff_member3) { FactoryBot.create :user, :wrc_member, receive_delegate_reports: true, delegate_reports_region: Country.c_find('USA') }
 
     it "gets cleared if user is not eligible anymore" do
       former_staff_member = FactoryBot.create :user, receive_delegate_reports: true
       User.clear_receive_delegate_reports_if_not_eligible
-      expect(former_staff_member.reload.receive_delegate_reports).to eq false
-      expect(staff_member1.reload.receive_delegate_reports).to eq true
+      expect(former_staff_member.reload.receive_delegate_reports).to be false
+      expect(staff_member1.reload.receive_delegate_reports).to be true
     end
 
     it "adds to reports@ only current staff members who want to receive reports" do
-      expect(User.delegate_reports_receivers_emails).to eq ["seniors@worldcubeassociation.org", "quality@worldcubeassociation.org", "regulations@worldcubeassociation.org", staff_member1.email]
+      expect(User.delegate_reports_receivers_emails).to match_array ["seniors@worldcubeassociation.org", "quality@worldcubeassociation.org", "regulations@worldcubeassociation.org", staff_member1.email]
+      expect(User.delegate_reports_receivers_emails(Country.c_find('USA'))).to match_array [staff_member3.email]
     end
   end
 
@@ -684,53 +641,27 @@ RSpec.describe User, type: :model do
     end
 
     it "if their registration is pending" do
-      registration.accepted_at = nil
+      registration.competing_status = Registrations::Helper::STATUS_PENDING
       expect(competitor.can_edit_registration?(registration)).to be true
     end
 
     it "unless their registration is accepted" do
-      registration.accepted_at = Time.now
+      registration.competing_status = Registrations::Helper::STATUS_ACCEPTED
       expect(competitor.can_edit_registration?(registration)).to be false
     end
 
     it "if event edit deadline is in the future" do
-      registration.accepted_at = Time.now
+      registration.competing_status = Registrations::Helper::STATUS_ACCEPTED
       competition.allow_registration_edits = true
       competition.event_change_deadline_date = 2.weeks.from_now
       expect(competitor.can_edit_registration?(registration)).to be true
     end
 
     it "unless event edit deadline has passed" do
-      registration.accepted_at = Time.now
+      registration.competing_status = Registrations::Helper::STATUS_ACCEPTED
       competition.allow_registration_edits = true
       competition.event_change_deadline_date = 2.weeks.ago
       expect(competitor.can_edit_registration?(registration)).to be false
-    end
-  end
-
-  describe "can self-delete registration" do
-    let!(:competitor) { FactoryBot.create :user }
-    let!(:competition) { FactoryBot.create :competition, :registration_open }
-    let!(:registration) { FactoryBot.create :registration, user: competitor, competition: competition }
-
-    it "if their registration is pending" do
-      registration.accepted_at = nil
-      competition.allow_registration_self_delete_after_acceptance = false
-      expect(competitor.can_delete_registration?(registration)).to be true
-      competition.allow_registration_self_delete_after_acceptance = true
-      expect(competitor.can_delete_registration?(registration)).to be true
-    end
-
-    it "if their registration is accepted and the competition still allows deletion" do
-      registration.accepted_at = Time.now
-      competition.allow_registration_self_delete_after_acceptance = true
-      expect(competitor.can_delete_registration?(registration)).to be true
-    end
-
-    it "unless their registration is accepted and the competition does not allow deletion afterwards" do
-      registration.accepted_at = Time.now
-      competition.allow_registration_self_delete_after_acceptance = false
-      expect(competitor.can_delete_registration?(registration)).to be false
     end
   end
 
@@ -746,7 +677,7 @@ RSpec.describe User, type: :model do
     end
 
     it "returns true for non-trainee Delegate roles" do
-      junior_delegate_user = FactoryBot.create(:candidate_delegate)
+      junior_delegate_user = FactoryBot.create(:junior_delegate)
       full_delegate_user = FactoryBot.create(:delegate)
       regional_delegate = FactoryBot.create(:regional_delegate_role)
       senior_delegate = FactoryBot.create(:senior_delegate_role)
@@ -789,19 +720,19 @@ RSpec.describe User, type: :model do
     end
 
     it "returns true for board user for any group" do
-      americas_region = FactoryBot.create(:delegate_region_americas)
+      americas_region = GroupsMetadataDelegateRegions.find_by!(friendly_id: 'americas').user_group
       board_user = FactoryBot.create(:user, :board_member)
       expect(board_user.has_permission?(:can_edit_groups, americas_region.id)).to be true
     end
 
     it "returns true for WRT user for any group" do
-      americas_region = FactoryBot.create(:delegate_region_americas)
+      americas_region = GroupsMetadataDelegateRegions.find_by!(friendly_id: 'americas').user_group
       wrt_user = FactoryBot.create(:user, :wrt_member)
       expect(wrt_user.has_permission?(:can_edit_groups, americas_region.id)).to be true
     end
 
     it "returns true for admin user for any group" do
-      americas_region = FactoryBot.create(:delegate_region_americas)
+      americas_region = GroupsMetadataDelegateRegions.find_by!(friendly_id: 'americas').user_group
       admin_user = FactoryBot.create(:admin)
       expect(admin_user.has_permission?(:can_edit_groups, americas_region.id)).to be true
     end
@@ -812,15 +743,26 @@ RSpec.describe User, type: :model do
     end
 
     it "returns true for senior delegate if scope requested is their subregion" do
-      usa_region = FactoryBot.create(:delegate_region_usa)
-      senior_delegate = FactoryBot.create(:senior_delegate_role, group: usa_region.parent_group).user
-      expect(senior_delegate.has_permission?(:can_edit_groups, usa_region.id)).to be true
+      asia_east_region = GroupsMetadataDelegateRegions.find_by!(friendly_id: 'asia-east').user_group
+      senior_delegate = FactoryBot.create(:senior_delegate_role, group: asia_east_region.parent_group).user
+      expect(senior_delegate.has_permission?(:can_edit_groups, asia_east_region.id)).to be true
     end
 
     it "returns false for senior delegate if scope requested is other's region" do
-      asia_pacific_region = FactoryBot.create(:delegate_region_asia_pacific)
+      asia_region = GroupsMetadataDelegateRegions.find_by!(friendly_id: 'asia').user_group
       senior_delegate = FactoryBot.create(:senior_delegate_role).user
-      expect(senior_delegate.has_permission?(:can_edit_groups, asia_pacific_region.id)).to be false
+      expect(senior_delegate.has_permission?(:can_edit_groups, asia_region.id)).to be false
+    end
+  end
+
+  describe "teams_committees_at_least_senior_roles has_many relation" do
+    it "returns the senior/leader roles for a user" do
+      user = FactoryBot.create(:user)
+      wrt_role = FactoryBot.create(:wrt_member_role, user: user)
+      wsot_leader_role = FactoryBot.create(:wsot_leader_role, user: user)
+      wrc_senior_member_role = FactoryBot.create(:wrc_senior_member_role, user: user)
+      expect(user.teams_committees_at_least_senior_roles).to include(wsot_leader_role, wrc_senior_member_role)
+      expect(user.teams_committees_at_least_senior_roles).not_to include(wrt_role)
     end
   end
 end

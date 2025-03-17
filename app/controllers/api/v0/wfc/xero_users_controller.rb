@@ -4,7 +4,7 @@ class Api::V0::Wfc::XeroUsersController < Api::V0::ApiController
   before_action :current_user_can_admin_finances!, only: [:index, :create]
   private def current_user_can_admin_finances!
     unless current_user.can_admin_finances?
-      render json: {}, status: 401
+      render json: {}, status: :unauthorized
     end
   end
 
@@ -22,5 +22,16 @@ class Api::V0::Wfc::XeroUsersController < Api::V0::ApiController
     else
       render json: wfc_xero_user.errors, status: :unprocessable_entity
     end
+  end
+
+  def update
+    id = params.require(:id)
+    wfc_xero_user = WfcXeroUser.find(id)
+    wfc_xero_user.update!(
+      name: params.require(:name),
+      email: params.require(:email),
+      is_combined_invoice: ActiveRecord::Type::Boolean.new.cast(params.require(:is_combined_invoice)),
+    )
+    render json: { success: true }
   end
 end
