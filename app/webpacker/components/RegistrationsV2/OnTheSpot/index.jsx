@@ -46,20 +46,22 @@ export default function Index({ competitionInfo }) {
             />
           </Form>
 
-          <RegistrationProvider
-            competitionInfo={competitionInfo}
-            userInfo={ {id: 158816} }
-            isProcessing={false}
-          >
-            <CompetingStep
-              nextStep={ { refresh: true } }
+          { userToRegister.user && (
+            <RegistrationProvider
               competitionInfo={competitionInfo}
-              user={ { id: 158816 } }
-              preferredEvents={[]}
-              qualifications={[]}
+              userInfo={ userToRegister.user }
+              isProcessing={false}
             >
-            </CompetingStep>
-          </RegistrationProvider>
+              <CompetingStep
+                nextStep={ { refresh: true } }
+                competitionInfo={competitionInfo}
+                user={ userToRegister.user }
+                preferredEvents={[]}
+                qualifications={[]}
+              >
+              </CompetingStep>
+            </RegistrationProvider>
+          )}
 
         </ConfirmProvider>
       </StoreProvider>
