@@ -141,6 +141,10 @@ class RegistrationsController < ApplicationController
     redirect_to competition_registrations_import_url(competition)
   end
 
+  def on_the_spot
+    @competition = competition_from_params
+  end
+
   def add
     @competition = competition_from_params
   end
