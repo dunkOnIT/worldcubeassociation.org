@@ -25,6 +25,7 @@ RSpec.describe "registrations/export.csv.erb" do
     end
   }
 
+  # Random comment
   it "renders valid csv" do
     assign(:competition, competition)
     assign(:registrations, competition.registrations)
