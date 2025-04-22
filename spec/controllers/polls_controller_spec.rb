@@ -19,7 +19,7 @@ RSpec.describe PollsController do
   end
 
   context "logged in as an admin" do
-    sign_in { FactoryBot.create :admin }
+    sign_in { FactoryBot.create(:admin) }
     it "shows poll results" do
       poll = FactoryBot.create(:poll)
       get :results, params: { id: poll.id }
@@ -28,7 +28,7 @@ RSpec.describe PollsController do
   end
 
   context "logged in as a delegate" do
-    sign_in { FactoryBot.create :delegate }
+    sign_in { FactoryBot.create(:delegate) }
     it "shows poll results" do
       poll = FactoryBot.create(:poll)
       get :results, params: { id: poll.id }
@@ -37,7 +37,7 @@ RSpec.describe PollsController do
   end
 
   context "logged in as a staff member" do
-    sign_in { FactoryBot.create :user, :wrt_member }
+    sign_in { FactoryBot.create(:user, :wrt_member) }
     it "shows poll results" do
       poll = FactoryBot.create(:poll)
       get :results, params: { id: poll.id }
@@ -46,7 +46,7 @@ RSpec.describe PollsController do
   end
 
   context "logged in as board member" do
-    let!(:board_member) { FactoryBot.create :user, :board_member }
+    let!(:board_member) { FactoryBot.create(:user, :board_member) }
 
     before :each do
       sign_in board_member

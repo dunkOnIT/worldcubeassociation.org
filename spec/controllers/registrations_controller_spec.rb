@@ -6,7 +6,7 @@ RSpec.describe RegistrationsController, :clean_db_with_truncation do
   context "signed in as organizer" do
     let!(:organizer) { FactoryBot.create(:user) }
     let(:competition) { FactoryBot.create(:competition, :registration_open, :visible, organizers: [organizer], events: Event.where(id: %w(222 333))) }
-    let(:zzyzx_user) { FactoryBot.create :user, name: "Zzyzx" }
+    let(:zzyzx_user) { FactoryBot.create(:user, name: "Zzyzx") }
     let(:registration) { FactoryBot.create(:registration, competition: competition, user: zzyzx_user) }
 
     before :each do
@@ -20,7 +20,7 @@ RSpec.describe RegistrationsController, :clean_db_with_truncation do
   end
 
   context "register" do
-    let(:competition) { FactoryBot.create :competition, :confirmed, :visible, :registration_open }
+    let(:competition) { FactoryBot.create(:competition, :confirmed, :visible, :registration_open) }
 
     it "redirects to competition root if competition is not using WCA registration" do
       competition.use_wca_registration = false

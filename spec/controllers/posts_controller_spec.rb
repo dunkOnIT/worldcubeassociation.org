@@ -69,7 +69,7 @@ RSpec.describe PostsController do
   end
 
   context "logged in as wrc member" do
-    sign_in { FactoryBot.create :user, :wrc_member }
+    sign_in { FactoryBot.create(:user, :wrc_member) }
 
     describe "GET #new" do
       it "works" do
@@ -89,7 +89,7 @@ RSpec.describe PostsController do
   end
 
   context "logged in as wic member" do
-    sign_in { FactoryBot.create :user, :wic_member }
+    sign_in { FactoryBot.create(:user, :wic_member) }
 
     describe "GET #new" do
       it "returns 200" do

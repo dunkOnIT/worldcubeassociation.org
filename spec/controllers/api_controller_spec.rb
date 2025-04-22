@@ -73,7 +73,7 @@ RSpec.describe Api::V0::ApiController, :clean_db_with_truncation do
     end
 
     it 'does not find dummy accounts' do
-      FactoryBot.create :dummy_user, name: "Aaron"
+      FactoryBot.create(:dummy_user, name: "Aaron")
       get :users_search, params: { q: "aaron" }
       expect(response).to have_http_status :ok
       json = response.parsed_body
@@ -187,8 +187,8 @@ RSpec.describe Api::V0::ApiController, :clean_db_with_truncation do
 
   describe 'GET #delegates' do
     it 'includes emails and regions' do
-      senior_delegate = FactoryBot.create :senior_delegate_role
-      delegate = FactoryBot.create :delegate_role, group_id: senior_delegate.group.id
+      senior_delegate = FactoryBot.create(:senior_delegate_role)
+      delegate = FactoryBot.create(:delegate_role, group_id: senior_delegate.group.id)
 
       get :delegates
       expect(response).to have_http_status :ok
@@ -365,7 +365,7 @@ RSpec.describe Api::V0::ApiController, :clean_db_with_truncation do
 
     context 'signed in with invalid wca id' do
       let(:user) do
-        u = FactoryBot.create :user, country_iso2: "US"
+        u = FactoryBot.create(:user, country_iso2: "US")
         u.update_column(:wca_id, "fooooo")
         u
       end
@@ -397,7 +397,7 @@ RSpec.describe Api::V0::ApiController, :clean_db_with_truncation do
     end
 
     context 'signed in without wca id' do
-      let(:user) { FactoryBot.create :user, country_iso2: "US" }
+      let(:user) { FactoryBot.create(:user, country_iso2: "US") }
       let(:scopes) { Doorkeeper::OAuth::Scopes.new }
       let(:token) { double acceptable?: true, accessible?: true, resource_owner_id: user.id, scopes: scopes }
 
@@ -443,10 +443,10 @@ RSpec.describe Api::V0::ApiController, :clean_db_with_truncation do
   end
 
   describe 'GET #competition_series/:id' do
-    let!(:series) { FactoryBot.create :competition_series }
-    let!(:competition1) { FactoryBot.create :competition, :confirmed, :visible, competition_series: series, latitude: 43_641_740, longitude: -79_376_902, start_date: '2023-01-01', end_date: '2023-01-01' }
-    let!(:competition2) { FactoryBot.create :competition, :confirmed, :visible, competition_series: series, latitude: 43_641_740, longitude: -79_376_902, start_date: '2023-01-02', end_date: '2023-01-02' }
-    let!(:competition3) { FactoryBot.create :competition, :confirmed, :visible, competition_series: series, latitude: 43_641_740, longitude: -79_376_902, start_date: '2023-01-03', end_date: '2023-01-03' }
+    let!(:series) { FactoryBot.create(:competition_series) }
+    let!(:competition1) { FactoryBot.create(:competition, :confirmed, :visible, competition_series: series, latitude: 43_641_740, longitude: -79_376_902, start_date: '2023-01-01', end_date: '2023-01-01') }
+    let!(:competition2) { FactoryBot.create(:competition, :confirmed, :visible, competition_series: series, latitude: 43_641_740, longitude: -79_376_902, start_date: '2023-01-02', end_date: '2023-01-02') }
+    let!(:competition3) { FactoryBot.create(:competition, :confirmed, :visible, competition_series: series, latitude: 43_641_740, longitude: -79_376_902, start_date: '2023-01-03', end_date: '2023-01-03') }
 
     it 'returns series portion of wcif json' do
       get :competition_series, params: { id: series.wcif_id }

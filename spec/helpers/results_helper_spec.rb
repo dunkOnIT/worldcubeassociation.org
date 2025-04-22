@@ -4,7 +4,7 @@ require "rails_helper"
 
 RSpec.describe ResultsHelper do
   describe "#historical_pb_markers" do
-    let(:person) { FactoryBot.create :person }
+    let(:person) { FactoryBot.create(:person) }
 
     it "returns a hash indicating which of the results given in the chronological order were PBs" do
       results = []

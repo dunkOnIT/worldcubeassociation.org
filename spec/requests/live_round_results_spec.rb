@@ -4,7 +4,7 @@ require "rails_helper"
 
 RSpec.describe "WCA Live API" do
   describe "GET #round_results" do
-    let!(:delegate) { FactoryBot.create :delegate }
+    let!(:delegate) { FactoryBot.create(:delegate) }
 
     it "Returns the Live Reults correctly" do
       sign_in delegate

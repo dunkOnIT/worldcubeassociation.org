@@ -6,10 +6,10 @@ RSpec.describe "API Competitions" do
   let(:headers) { { "CONTENT_TYPE" => "application/json" } }
 
   describe "GET #index" do
-    let!(:competition1) { FactoryBot.create :competition, :visible, starts: 1.week.from_now, name: "First 2019" }
-    let!(:competition2) { FactoryBot.create :competition, :visible, starts: 1.week.from_now, name: "Second 2019" }
-    let!(:competition3) { FactoryBot.create :competition, :visible, starts: 2.weeks.from_now, name: "Third 2019" }
-    let!(:competition4) { FactoryBot.create :competition, :visible, starts: 3.weeks.from_now, name: "Fourth 2019" }
+    let!(:competition1) { FactoryBot.create(:competition, :visible, starts: 1.week.from_now, name: "First 2019") }
+    let!(:competition2) { FactoryBot.create(:competition, :visible, starts: 1.week.from_now, name: "Second 2019") }
+    let!(:competition3) { FactoryBot.create(:competition, :visible, starts: 2.weeks.from_now, name: "Third 2019") }
+    let!(:competition4) { FactoryBot.create(:competition, :visible, starts: 3.weeks.from_now, name: "Fourth 2019") }
 
     it "orders competitions by date descending by default" do
       get api_v0_competitions_path, params: { start: 2.weeks.from_now }
@@ -41,8 +41,8 @@ RSpec.describe "API Competitions" do
   end
 
   describe "GET #results" do
-    let!(:competition) { FactoryBot.create :competition, :visible }
-    let!(:result) { FactoryBot.create :result, competition: competition }
+    let!(:competition) { FactoryBot.create(:competition, :visible) }
+    let!(:result) { FactoryBot.create(:result, competition: competition) }
 
     it "renders properly" do
       get api_v0_competition_results_path(competition)
@@ -53,8 +53,8 @@ RSpec.describe "API Competitions" do
   end
 
   describe "GET #scrambles" do
-    let!(:competition) { FactoryBot.create :competition, :visible }
-    let!(:scramble) { FactoryBot.create :scramble, competition: competition }
+    let!(:competition) { FactoryBot.create(:competition, :visible) }
+    let!(:scramble) { FactoryBot.create(:scramble, competition: competition) }
 
     it "renders properly" do
       get api_v0_competition_scrambles_path(competition)
@@ -65,8 +65,8 @@ RSpec.describe "API Competitions" do
   end
 
   describe "GET #competitors" do
-    let!(:competition) { FactoryBot.create :competition, :visible }
-    let!(:result) { FactoryBot.create :result, competition: competition }
+    let!(:competition) { FactoryBot.create(:competition, :visible) }
+    let!(:result) { FactoryBot.create(:result, competition: competition) }
 
     it "renders properly" do
       get api_v0_competition_competitors_path(competition)
@@ -77,9 +77,9 @@ RSpec.describe "API Competitions" do
   end
 
   describe "GET #registrations" do
-    let!(:competition) { FactoryBot.create :competition, :visible }
-    let!(:accepted_registration) { FactoryBot.create :registration, :accepted, competition: competition }
-    let!(:pending_registration) { FactoryBot.create :registration, competition: competition }
+    let!(:competition) { FactoryBot.create(:competition, :visible) }
+    let!(:accepted_registration) { FactoryBot.create(:registration, :accepted, competition: competition) }
+    let!(:pending_registration) { FactoryBot.create(:registration, competition: competition) }
 
     it "renders properly" do
       get api_v0_competition_registrations_path(competition)
@@ -102,7 +102,7 @@ RSpec.describe "API Competitions" do
     end
 
     context "when signed in as not a competition manager" do
-      sign_in { FactoryBot.create :user }
+      sign_in { FactoryBot.create(:user) }
 
       it "does not allow access" do
         patch api_v0_competition_update_wcif_path(competition)
@@ -174,7 +174,7 @@ RSpec.describe "API Competitions" do
     context "when signed in as not a competition manager" do
       let(:competition) { FactoryBot.create(:competition, :visible) }
 
-      sign_in { FactoryBot.create :user }
+      sign_in { FactoryBot.create(:user) }
 
       it "does not allow access" do
         patch api_v0_competition_update_wcif_path(competition)
@@ -188,7 +188,7 @@ RSpec.describe "API Competitions" do
       let!(:competition) { FactoryBot.create(:competition, :future, :with_delegate, :with_organizer, :visible) }
 
       context "when signed in as a board member" do
-        sign_in { FactoryBot.create :user, :board_member }
+        sign_in { FactoryBot.create(:user, :board_member) }
 
         it "updates the competition events of an unconfirmed competition" do
           patch api_v0_competition_update_wcif_path(competition), params: create_wcif_with_events(%w(333)).to_json, headers: headers
@@ -197,8 +197,8 @@ RSpec.describe "API Competitions" do
         end
 
         it "does not delete all rounds of an event if something is invalid" do
-          FactoryBot.create :round, competition: competition, event_id: "333", number: 1
-          FactoryBot.create :round, competition: competition, event_id: "333", number: 2
+          FactoryBot.create(:round, competition: competition, event_id: "333", number: 1)
+          FactoryBot.create(:round, competition: competition, event_id: "333", number: 2)
           competition.reload
 
           ce = competition.competition_events.find_by(event_id: "333")
@@ -513,7 +513,7 @@ RSpec.describe "API Competitions" do
       end
 
       context "as a normal user" do
-        let!(:user) { FactoryBot.create :user }
+        let!(:user) { FactoryBot.create(:user) }
         let(:scopes) { Doorkeeper::OAuth::Scopes.new }
 
         before :each do
@@ -543,7 +543,7 @@ RSpec.describe "API Competitions" do
       end
 
       context "cookies based user" do
-        sign_in { FactoryBot.create :user }
+        sign_in { FactoryBot.create(:user) }
 
         it "prevents from CSRF attacks" do
           headers["ACCESS_TOKEN"] = "INVALID"

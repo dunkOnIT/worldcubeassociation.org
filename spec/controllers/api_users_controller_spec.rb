@@ -84,7 +84,7 @@ RSpec.describe Api::V0::UsersController do
 
   describe 'GET #permissions' do
     let!(:normal_user) { FactoryBot.create(:user_with_wca_id, name: "Jeremy") }
-    let!(:senior_delegate_role) { FactoryBot.create :senior_delegate_role }
+    let!(:senior_delegate_role) { FactoryBot.create(:senior_delegate_role) }
 
     it 'correctly returns user a normal users permission' do
       sign_in normal_user
@@ -121,7 +121,7 @@ RSpec.describe Api::V0::UsersController do
     end
 
     it 'correctly returns delegate to be able to create competitions' do
-      delegate = FactoryBot.create :delegate_role
+      delegate = FactoryBot.create(:delegate_role)
       sign_in delegate.user
       get :permissions
       expect(response).to have_http_status :ok
@@ -169,8 +169,8 @@ RSpec.describe Api::V0::UsersController do
       expect(json["can_administer_competitions"]["scope"]).to eq "*"
     end
 
-    let!(:delegate_user) { (FactoryBot.create :delegate_role, group_id: senior_delegate_role.group.id).user }
-    let!(:organizer_user) { FactoryBot.create :user }
+    let!(:delegate_user) { FactoryBot.create(:delegate_role, group_id: senior_delegate_role.group.id).user }
+    let!(:organizer_user) { FactoryBot.create(:user) }
     let!(:competition) {
       FactoryBot.create(:competition, :confirmed, delegates: [delegate_user], organizers: [organizer_user])
     }

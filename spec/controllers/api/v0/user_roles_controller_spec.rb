@@ -6,8 +6,8 @@ RSpec.describe Api::V0::UserRolesController do
   describe 'GET #list' do
     let!(:user_senior_delegate_role) { FactoryBot.create(:senior_delegate_role) }
     let!(:user_whose_delegate_status_changes) { FactoryBot.create(:junior_delegate_role, group_id: user_senior_delegate_role.group_id).user }
-    let!(:delegate) { FactoryBot.create :delegate_role, group_id: user_senior_delegate_role.group_id }
-    let!(:person) { FactoryBot.create :person, dob: '1990-01-02' }
+    let!(:delegate) { FactoryBot.create(:delegate_role, group_id: user_senior_delegate_role.group_id) }
+    let!(:person) { FactoryBot.create(:person, dob: '1990-01-02') }
     let!(:user_who_claims_wca_id) do
       FactoryBot.create(
         :user,

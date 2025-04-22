@@ -4,7 +4,7 @@ require 'rails_helper'
 
 RSpec.describe Api::V0::Wrt::PersonsController, type: :controller do
   describe 'PATCH #update person' do
-    sign_in { FactoryBot.create :admin }
+    sign_in { FactoryBot.create(:admin) }
 
     let(:person) { FactoryBot.create(:person_who_has_competed_once, name: "Feliks Zemdegs", country_id: "Australia") }
 

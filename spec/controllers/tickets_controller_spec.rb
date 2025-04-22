@@ -4,7 +4,7 @@ require 'rails_helper'
 
 RSpec.describe TicketsController do
   describe "POST #anonymize" do
-    sign_in { FactoryBot.create :admin }
+    sign_in { FactoryBot.create(:admin) }
 
     it 'can anonymize person' do
       person = FactoryBot.create(:person_who_has_competed_once)

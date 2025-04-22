@@ -3,8 +3,8 @@
 require 'rails_helper'
 
 RSpec.describe CompetitionTabsController, type: :controller do
-  let!(:organizer) { FactoryBot.create :user }
-  let(:competition) { FactoryBot.create :competition, organizers: [organizer] }
+  let!(:organizer) { FactoryBot.create(:user) }
+  let(:competition) { FactoryBot.create(:competition, organizers: [organizer]) }
 
   context "when signed in as organizer" do
     before do

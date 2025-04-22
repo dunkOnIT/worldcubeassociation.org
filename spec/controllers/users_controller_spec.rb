@@ -6,7 +6,7 @@ RSpec.describe UsersController do
   describe "GET #edit" do
     let(:user) { FactoryBot.create(:user_with_wca_id) }
 
-    sign_in { FactoryBot.create :admin }
+    sign_in { FactoryBot.create(:admin) }
 
     it "populates user" do
       get :edit, params: { id: user.id }
@@ -36,7 +36,7 @@ RSpec.describe UsersController do
     end
 
     it "cannot claim wca id for another user" do
-      other_user = FactoryBot.create :user
+      other_user = FactoryBot.create(:user)
 
       old_unconfirmed_wca_id = other_user.unconfirmed_wca_id
       patch :update, params: { id: other_user.id, user: { claiming_wca_id: true, unconfirmed_wca_id: person.wca_id, delegate_id_to_handle_wca_id_claim: delegate.id } }
@@ -58,7 +58,7 @@ RSpec.describe UsersController do
   describe "approve wca id claim" do
     let!(:delegate) { FactoryBot.create(:delegate) }
     let(:person) { FactoryBot.create(:person) }
-    let(:user) { FactoryBot.create :user, unconfirmed_wca_id: person.wca_id, delegate_to_handle_wca_id_claim: delegate, dob_verification: person.dob }
+    let(:user) { FactoryBot.create(:user, unconfirmed_wca_id: person.wca_id, delegate_to_handle_wca_id_claim: delegate, dob_verification: person.dob) }
 
     before :each do
       sign_in delegate
@@ -81,8 +81,8 @@ RSpec.describe UsersController do
     end
 
     it "can set id to something not claimed if the details match" do
-      person2 = FactoryBot.create :person, name: user.name, country_id: user.country.id,
-                                           dob: user.dob, gender: user.gender
+      person2 = FactoryBot.create(:person, name: user.name, country_id: user.country.id,
+                                           dob: user.dob, gender: user.gender)
       patch :update, params: { id: user, user: { wca_id: person2.wca_id } }
       user.reload
       expect(user.wca_id).to eq person2.wca_id
@@ -91,7 +91,7 @@ RSpec.describe UsersController do
     end
 
     it "can change claimed id" do
-      person2 = FactoryBot.create :person
+      person2 = FactoryBot.create(:person)
       patch :update, params: { id: user, user: { unconfirmed_wca_id: person2.wca_id } }
       user.reload
       expect(user.unconfirmed_wca_id).to eq person2.wca_id
@@ -99,7 +99,7 @@ RSpec.describe UsersController do
     end
 
     it "can clear claimed id" do
-      FactoryBot.create :person
+      FactoryBot.create(:person)
       patch :update, params: { id: user, user: { unconfirmed_wca_id: "" } }
       user.reload
       expect(user.unconfirmed_wca_id).to be_nil
@@ -185,7 +185,7 @@ RSpec.describe UsersController do
   end
 
   describe "GET #index" do
-    sign_in { FactoryBot.create :admin }
+    sign_in { FactoryBot.create(:admin) }
 
     it "is injection safe" do
       get :index, params: { format: :json, sort: "country", order: "ASC -- HMM" }
@@ -207,7 +207,7 @@ RSpec.describe UsersController do
     end
 
     context 'signed in' do
-      let!(:admin) { FactoryBot.create :admin, cookies_acknowledged: false }
+      let!(:admin) { FactoryBot.create(:admin, cookies_acknowledged: false) }
 
       before :each do
         sign_in admin

@@ -10,8 +10,8 @@ RSpec.describe 'API Registrations' do
 
   describe 'POST #create' do
     context 'when creating a registration' do
-      let(:user) { FactoryBot.create :user }
-      let(:competition) { FactoryBot.create :competition, :registration_open }
+      let(:user) { FactoryBot.create(:user) }
+      let(:competition) { FactoryBot.create(:competition, :registration_open) }
       let(:headers) { { 'Authorization' => registration_request['jwt_token'] } }
       let(:registration_request) { FactoryBot.build(:registration_request, competition_id: competition.id, user_id: user.id) }
 
@@ -326,8 +326,8 @@ RSpec.describe 'API Registrations' do
   end
 
   describe 'PATCH #update' do
-    let(:user) { FactoryBot.create :user }
-    let(:competition) { FactoryBot.create :competition, :registration_open, :editable_registrations, :with_organizer }
+    let(:user) { FactoryBot.create(:user) }
+    let(:competition) { FactoryBot.create(:competition, :registration_open, :editable_registrations, :with_organizer) }
     let(:registration) { FactoryBot.create(:registration, competition: competition, user: user) }
     let(:paid_cant_cancel) {
       FactoryBot.create(
@@ -852,11 +852,11 @@ RSpec.describe 'API Registrations' do
   end
 
   describe 'PATCH #bulk_update' do
-    let(:competition) { FactoryBot.create :competition, :registration_open, :editable_registrations, :with_competitor_limit, :with_organizer }
+    let(:competition) { FactoryBot.create(:competition, :registration_open, :editable_registrations, :with_competitor_limit, :with_organizer) }
 
-    let(:user1) { FactoryBot.create :user }
-    let(:user2) { FactoryBot.create :user }
-    let(:user3) { FactoryBot.create :user }
+    let(:user1) { FactoryBot.create(:user) }
+    let(:user2) { FactoryBot.create(:user) }
+    let(:user3) { FactoryBot.create(:user) }
 
     let(:registration1) { FactoryBot.create(:registration, competition: competition, user: user1) }
     let(:registration2) { FactoryBot.create(:registration, competition: competition, user: user2) }
@@ -1232,14 +1232,14 @@ RSpec.describe 'API Registrations' do
   end
 
   describe 'GET #list_admin' do
-    let(:competition) { FactoryBot.create :competition, :registration_open, :editable_registrations, :with_organizer }
+    let(:competition) { FactoryBot.create(:competition, :registration_open, :editable_registrations, :with_organizer) }
 
-    let(:user1) { FactoryBot.create :user }
-    let(:user2) { FactoryBot.create :user }
-    let(:user3) { FactoryBot.create :user }
-    let(:user4) { FactoryBot.create :user }
-    let(:user5) { FactoryBot.create :user }
-    let(:user6) { FactoryBot.create :user }
+    let(:user1) { FactoryBot.create(:user) }
+    let(:user2) { FactoryBot.create(:user) }
+    let(:user3) { FactoryBot.create(:user) }
+    let(:user4) { FactoryBot.create(:user) }
+    let(:user5) { FactoryBot.create(:user) }
+    let(:user6) { FactoryBot.create(:user) }
 
     let!(:registration1) { FactoryBot.create(:registration, :accepted, competition: competition, user: user1) }
     let!(:registration2) { FactoryBot.create(:registration, :accepted, competition: competition, user: user2) }

@@ -3,13 +3,13 @@
 require 'rails_helper'
 
 RSpec.describe DelegateReportsController do
-  let(:delegate) { FactoryBot.create :delegate }
-  let(:trainee_delegate) { FactoryBot.create :trainee_delegate }
+  let(:delegate) { FactoryBot.create(:delegate) }
+  let(:trainee_delegate) { FactoryBot.create(:trainee_delegate) }
   let(:comp) { FactoryBot.create(:competition, delegates: [delegate, trainee_delegate], starts: 2.days.ago) }
-  let!(:delegate_report1) { FactoryBot.create :delegate_report, :with_images, competition: comp, schedule_url: "http://example.com" }
+  let!(:delegate_report1) { FactoryBot.create(:delegate_report, :with_images, competition: comp, schedule_url: "http://example.com") }
   let(:pre_delegate_reports_form_comp) { FactoryBot.create(:competition, delegates: [delegate], starts: Date.new(2015, 1, 1)) }
-  let!(:delegate_report2) { FactoryBot.create :delegate_report, :with_images, competition: pre_delegate_reports_form_comp, schedule_url: "http://example.com" }
-  let!(:wrc_members) { FactoryBot.create_list :user, 3, :wrc_member }
+  let!(:delegate_report2) { FactoryBot.create(:delegate_report, :with_images, competition: pre_delegate_reports_form_comp, schedule_url: "http://example.com") }
+  let!(:wrc_members) { FactoryBot.create_list(:user, 3, :wrc_member) }
 
   context "not logged in" do
     it "redirects to sign in" do

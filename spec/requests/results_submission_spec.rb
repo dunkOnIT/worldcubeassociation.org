@@ -3,7 +3,7 @@
 require 'rails_helper'
 
 RSpec.describe ResultsSubmissionController, type: :request do
-  let(:delegate) { FactoryBot.create :delegate }
+  let(:delegate) { FactoryBot.create(:delegate) }
   let(:comp) { FactoryBot.create(:competition, :with_valid_submitted_results, delegates: [delegate]) }
 
   context "not logged in" do

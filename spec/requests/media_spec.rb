@@ -11,7 +11,7 @@ RSpec.shared_examples "only WCT" do |action, expect_success|
   end
 
   context "when signed in as regular user" do
-    sign_in { FactoryBot.create :user }
+    sign_in { FactoryBot.create(:user) }
 
     it "redirects to home page" do
       self.instance_exec(&action)
@@ -40,7 +40,7 @@ RSpec.shared_examples "must sign in" do |action, expect_success|
   end
 
   context "when signed in as regular user" do
-    let!(:user) { FactoryBot.create :user }
+    let!(:user) { FactoryBot.create(:user) }
 
     before :each do
       sign_in user
@@ -195,7 +195,7 @@ RSpec.describe "media" do
       end
 
       it "can edit medium" do
-        competition = FactoryBot.create :competition
+        competition = FactoryBot.create(:competition)
         expect(medium.media_type).to eq 'article'
 
         patch_medium.call(

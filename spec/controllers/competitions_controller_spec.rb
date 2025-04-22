@@ -38,7 +38,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as an admin' do
-      sign_in { FactoryBot.create :admin }
+      sign_in { FactoryBot.create(:admin) }
 
       it 'shows the competition creation form' do
         get :new
@@ -47,7 +47,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as a delegate' do
-      sign_in { FactoryBot.create :delegate }
+      sign_in { FactoryBot.create(:delegate) }
 
       it 'shows the competition creation form' do
         get :new
@@ -56,7 +56,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as a regular user' do
-      sign_in { FactoryBot.create :user }
+      sign_in { FactoryBot.create(:user) }
 
       it 'does not allow access' do
         get :new
@@ -76,7 +76,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as a senior Delegate' do
-      sign_in { (FactoryBot.create :senior_delegate_role).user }
+      sign_in { FactoryBot.create(:senior_delegate_role).user }
 
       it 'renders the for_senior page' do
         get :for_senior
@@ -85,7 +85,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as a regular Delegate' do
-      sign_in { FactoryBot.create :delegate }
+      sign_in { FactoryBot.create(:delegate) }
 
       it 'does not allow access' do
         get :for_senior
@@ -96,7 +96,7 @@ RSpec.describe CompetitionsController do
 
   describe 'GET #nearby_competitions' do
     let(:organizer) { FactoryBot.create(:user) }
-    let(:admin) { FactoryBot.create :admin }
+    let(:admin) { FactoryBot.create(:admin) }
     let!(:my_competition) { FactoryBot.create(:competition, :confirmed, latitude: 10.0, longitude: 10.0, organizers: [organizer], starts: 1.week.ago) }
     let!(:other_competition) {
       FactoryBot.create(
@@ -145,7 +145,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as a regular user' do
-      sign_in { FactoryBot.create :user }
+      sign_in { FactoryBot.create(:user) }
       it 'does not allow creation' do
         post :create, params: { competition: { name: "Test2015" } }
         expect(response).to have_http_status(:forbidden)
@@ -153,7 +153,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as an admin' do
-      sign_in { FactoryBot.create :admin }
+      sign_in { FactoryBot.create(:admin) }
 
       it "creates a new competition" do
         creation_params = build_competition_update(Competition.new, name: "FatBoyXPC 2015", venue: { countryId: "USA" }, website: { usesWcaRegistration: false })
@@ -175,14 +175,14 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as a delegate' do
-      let(:delegate) { FactoryBot.create :delegate }
+      let(:delegate) { FactoryBot.create(:delegate) }
 
       before :each do
         sign_in delegate
       end
 
       it 'creates a new competition with organizers and expect them to receive a notification email' do
-        organizer = FactoryBot.create :user
+        organizer = FactoryBot.create(:user)
         expect(CompetitionsMailer).to receive(:notify_organizer_of_addition_to_competition).with(delegate, anything, organizer).and_call_original
         creation_params = build_competition_update(Competition.new, name: "Test 2015", venue: { countryId: "USA" }, staff: { staffDelegateIds: [delegate.id], organizerIds: [organizer.id] }, website: { usesWcaRegistration: false })
         expect do
@@ -196,7 +196,7 @@ RSpec.describe CompetitionsController do
       end
 
       it 'shows an error message under name when creating a competition with a duplicate id' do
-        competition = FactoryBot.create :competition, :with_delegate
+        competition = FactoryBot.create(:competition, :with_delegate)
         creation_params = build_competition_update(competition, staff: { staffDelegateIds: [delegate.id] }, eventRestrictions: { mainEventId: nil })
         post :create, params: creation_params, as: :json
         expect(response).to have_http_status(:bad_request)
@@ -269,7 +269,7 @@ RSpec.describe CompetitionsController do
 
   describe 'POST #update' do
     context 'when signed in as an admin' do
-      sign_in { FactoryBot.create :admin }
+      sign_in { FactoryBot.create(:admin) }
 
       it 'can confirm competition' do
         put :confirm, params: { competition_id: competition }
@@ -462,7 +462,7 @@ RSpec.describe CompetitionsController do
       end
 
       it "adds another organizer and expects him to receive a notification email" do
-        new_organizer = FactoryBot.create :user
+        new_organizer = FactoryBot.create(:user)
         expect(CompetitionsMailer).to receive(:notify_organizer_of_addition_to_competition).with(competition.delegates.last, competition, new_organizer).and_call_original
         organizers = [competition.organizers.first, new_organizer]
         update_params = build_competition_update(competition, staff: { organizerIds: organizers.map(&:id) })
@@ -472,7 +472,7 @@ RSpec.describe CompetitionsController do
       end
 
       it "notifies organizers correctly when id changes" do
-        new_organizer = FactoryBot.create :user
+        new_organizer = FactoryBot.create(:user)
         update_params = build_competition_update(competition, competitionId: "NewId2018", staff: { organizerIds: [competition.organizers.last.id, new_organizer.id] })
         competition.id = "NewId2018"
         expect(CompetitionsMailer).to receive(:notify_organizer_of_addition_to_competition).with(competition.delegates.last, competition, new_organizer).and_call_original
@@ -692,7 +692,7 @@ RSpec.describe CompetitionsController do
       end
 
       it "adds another organizer and expects him to receive a notification email" do
-        new_organizer = FactoryBot.create :user
+        new_organizer = FactoryBot.create(:user)
         expect(CompetitionsMailer).to receive(:notify_organizer_of_addition_to_competition).with(competition.trainee_delegates.last, competition, new_organizer).and_call_original
         organizers = [competition.organizers.first, new_organizer]
         update_params = build_competition_update(competition, staff: { organizerIds: organizers.map(&:id) })
@@ -702,7 +702,7 @@ RSpec.describe CompetitionsController do
       end
 
       it "notifies organizers correctly when id changes" do
-        new_organizer = FactoryBot.create :user
+        new_organizer = FactoryBot.create(:user)
         update_params = build_competition_update(competition, competitionId: "NewId2018", staff: { organizerIds: [competition.organizers.last.id, new_organizer.id] })
         competition.id = "NewId2018"
         expect(CompetitionsMailer).to receive(:notify_organizer_of_addition_to_competition).with(competition.trainee_delegates.last, competition, new_organizer).and_call_original
@@ -978,7 +978,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'regular user trying to close registration via button' do
-      sign_in { FactoryBot.create :user }
+      sign_in { FactoryBot.create(:user) }
       it 'does not allow regular user to use organiser reg close button' do
         comp_with_full_reg = FactoryBot.create(:competition, :registration_open, competitor_limit_enabled: true, competitor_limit: 1, competitor_limit_reason: "we have a tiny venue")
         FactoryBot.create(:registration, :accepted, :newcomer, competition: comp_with_full_reg)
@@ -1088,14 +1088,14 @@ RSpec.describe CompetitionsController do
     let!(:past_competition3) { FactoryBot.create(:competition, starts: 3.months.ago, delegates: [delegate], events: Event.where(id: %w(222 333))) }
     let!(:past_competition4) { FactoryBot.create(:competition, :results_posted, starts: 4.months.ago, delegates: [delegate], events: Event.where(id: %w(222 333))) }
     let!(:unscheduled_competition1) { FactoryBot.create(:competition, starts: nil, ends: nil, delegates: [delegate], events: Event.where(id: %w(222 333))) }
-    let(:registered_user) { FactoryBot.create :user, name: "Jan-Ove Waldner" }
+    let(:registered_user) { FactoryBot.create(:user, name: "Jan-Ove Waldner") }
     let!(:registration1) { FactoryBot.create(:registration, :accepted, competition: future_competition1, user: registered_user) }
     let!(:registration2) { FactoryBot.create(:registration, :accepted, competition: future_competition3, user: registered_user) }
     let!(:registration3) { FactoryBot.create(:registration, :accepted, competition: past_competition1, user: registered_user) }
     let!(:registration4) { FactoryBot.create(:registration, :accepted, competition: past_competition3, user: organizer) }
     let!(:registration5) { FactoryBot.create(:registration, :accepted, competition: future_competition3, user: delegate) }
     let!(:results_person) { FactoryBot.create(:person, wca_id: "2014PLUM01", name: "Jeff Plumb") }
-    let!(:results_user) { FactoryBot.create :user, name: "Jeff Plumb", wca_id: "2014PLUM01" }
+    let!(:results_user) { FactoryBot.create(:user, name: "Jeff Plumb", wca_id: "2014PLUM01") }
     let!(:result) { FactoryBot.create(:result, person: results_person, competition_id: past_competition1.id) }
 
     context 'when not signed in' do
@@ -1239,7 +1239,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as an admin' do
-      sign_in { FactoryBot.create :admin }
+      sign_in { FactoryBot.create(:admin) }
 
       it 'shows the edit competition events form' do
         get :edit_events, params: { id: competition.id }
@@ -1248,7 +1248,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as a regular user' do
-      sign_in { FactoryBot.create :user }
+      sign_in { FactoryBot.create(:user) }
 
       it 'does not allow access' do
         expect {
@@ -1269,7 +1269,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as an admin' do
-      sign_in { FactoryBot.create :admin }
+      sign_in { FactoryBot.create(:admin) }
 
       it 'displays payment setup status' do
         get :payment_integration_setup, params: { competition_id: competition }
@@ -1279,7 +1279,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as a regular user' do
-      sign_in { FactoryBot.create :user }
+      sign_in { FactoryBot.create(:user) }
 
       it 'does not allow access' do
         expect {
@@ -1300,7 +1300,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as a regular user' do
-      sign_in { FactoryBot.create :user }
+      sign_in { FactoryBot.create(:user) }
 
       it 'does not allow access' do
         expect {
@@ -1321,7 +1321,7 @@ RSpec.describe CompetitionsController do
     end
 
     context 'when signed in as a regular user' do
-      sign_in { FactoryBot.create :user }
+      sign_in { FactoryBot.create(:user) }
 
       it 'does not allow access' do
         expect {
