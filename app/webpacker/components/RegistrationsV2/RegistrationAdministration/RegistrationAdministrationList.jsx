@@ -17,6 +17,8 @@ import bulkAutoAccept from '../api/registration/patch/bulk_auto_accept';
 import RegistrationAdministrationTable from './RegistrationsAdministrationTable';
 import useCheckboxState from '../../../lib/hooks/useCheckboxState';
 import useOrderedSet from '../../../lib/hooks/useOrderedSet';
+import { hasNotPassed, hasPassed } from '../../../lib/utils/dates';
+import usePerpetualState from '../hooks/usePerpetualState';
 import {
   APPROVED_COLOR, APPROVED_ICON,
   CANCELLED_COLOR, CANCELLED_ICON,
@@ -66,6 +68,11 @@ export default function RegistrationAdministrationList({ competitionInfo }) {
   const dispatchStore = useDispatch();
 
   const actionsRef = useRef();
+
+  const registrationCurrentlyOpen = usePerpetualState(
+    () => hasPassed(competitionInfo.registration_open) && hasNotPassed(competitionInfo.registration_close),
+  );
+
 
   const {
     isLoading: isRegistrationsLoading,
@@ -423,7 +430,7 @@ export default function RegistrationAdministrationList({ competitionInfo }) {
 
   return (
     <Segment loading={isMutating || isAutoAccepting}>
-      {competitionInfo.auto_accept_registrations && (
+      {competitionInfo.auto_accept_registrations && registrationCurrentlyOpen && (
         <>
           <Button
             disabled={isAutoAccepting}
@@ -444,19 +451,24 @@ export default function RegistrationAdministrationList({ competitionInfo }) {
             <Modal.Content>
               {modalData !== null ? (
                 <List bulleted>
-                  {Object.entries(modalData).map(([key, value]) => (
-                    <List.Item key={key}>
-                      {key}
-                      {' - '}
-                      <b>Succeeded</b>
-                      {': '}
-                      {value.succeeded.toString()}
-                      {', '}
-                      <b>Info</b>
-                      {': '}
-                      {value.info}
-                    </List.Item>
-                  ))}
+                  {Object.entries(modalData).map(([key, value]) => {
+                    const name = registrations.find(reg => reg.id === key)
+                    console.log("name:")
+                    console.log(name)
+                    return (
+                      <List.Item key={key}>
+                        {name}
+                        {' - '}
+                        <b>Succeeded</b>
+                        {': '}
+                        {value.succeeded.toString()}
+                        {', '}
+                        <b>Info</b>
+                        {': '}
+                        {value.info}
+                      </List.Item>
+                    )
+                  })}
                 </List>
               ) : (
                 <p>No data available.</p>
