@@ -44,6 +44,10 @@
     "flag_id": "ca",
     "name": "Français Canadien"
   },
+  "hi": {
+    "flag_id": "hi",
+    "name": "Hindi"
+  },
   "hr": {
     "flag_id": "hr",
     "name": "Hrvatski"
