@@ -182,17 +182,25 @@ class Registration < ApplicationRecord
     )
   end
 
-  def last_payment
+  def last_payment(include_incomplete: false)
     if registration_payments.loaded?
-      registration_payments.completed.max_by(&:paid_at)
+      if include_incomplete
+        registration_payments.max_by(&:created_at)
+      else
+        registration_payments.completed.max_by(&:created_at)
+      end
     else
-      registration_payments.completed.order(:paid_at).last
+      if include_incomplete
+        registration_payments.order(:created_at).last
+      else
+        registration_payments.completed.order(:created_at).last
+      end
     end
   end
 
   def last_payment_status
     # Store this in a variable so we don't have to recompute over and over
-    most_recent_payment = self.last_payment
+    most_recent_payment = self.last_payment(include_incomplete: self.competition.using_manual_payment?)
 
     return nil if most_recent_payment.blank?
     return "refund" if most_recent_payment.refunded_registration_payment_id?
@@ -215,6 +223,7 @@ class Registration < ApplicationRecord
     user_id
   )
     add_history_entry({ payment_status: receipt.determine_wca_status, iso_amount: amount_lowest_denomination }, "user", user_id, 'Payment')
+
     registration_payments.create!(
       amount_lowest_denomination: amount_lowest_denomination,
       currency_code: currency_code,
@@ -281,6 +290,11 @@ class Registration < ApplicationRecord
     end
   end
 
+  def payment_reference
+    # TODO: We currently have no concept of payment reference for stripe or paypal
+    registration_payments.first&.receipt&.payment_reference
+  end
+
   def to_v2_json(admin: false, pii: false)
     private_attributes = pii ? %w[dob email] : nil
 
@@ -298,8 +312,10 @@ class Registration < ApplicationRecord
       if competition.using_payment_integrations?
         base_json.deep_merge!({
                                 payment: {
+                                  id: last_payment(include_incomplete: true)&.id,
                                   has_paid: outstanding_entry_fees <= 0,
                                   payment_status: last_payment_status,
+                                  payment_reference: payment_reference,
                                   paid_amount_iso: paid_entry_fees.cents,
                                   currency_code: paid_entry_fees.currency.iso_code,
                                   updated_at: last_payment&.paid_at,

@@ -1261,6 +1261,9 @@ en:
     entry_fees_partially_paid: "You have paid %{paid} of %{total}. Check with the organizers if you need to pay the rest."
     entry_fees_fully_refunded: "Your registration fees were fully refunded. If you need to pay again, you can do so below"
     entry_fees_pay_again: "I want to pay again"
+    pending_manual_payment: "Waiting for organizers to confirm your payment. You may update your payment reference \"%{payment_reference}\" below if needed."
+    approved_manual_payment: "Your payment with reference \"%{payment_reference}\" has been confirmed by the organizers."
+    update_payment_ref: "I want to update my payment reference"
     will_pay_here: "You will pay them here after submitting your registration"
     wont_pay_here: "Please check the competition's information for instructions about how to pay"
     refund_form:
@@ -1272,6 +1275,7 @@ en:
       payment_processing: "Your payment has been confirmed, but the transaction is still pending."
       payment_partial: "Your payment has been confirmed, but it does not cover the full amount. Please pay the remaining fee as well."
       button_text: "Pay now!"
+      manual_button_text: "Submit"
       hints:
         donation: "Optional donation that will go only to the organization team"
         payment_button: "Your payment information never reaches the WCA website. It is securely sent to Stripe, which handles the payment process and gets back to us."
@@ -1872,6 +1876,10 @@ en:
          refunded_status: "Refunded"
          initialized: "Payment process was started on %{date}, but not finished."
          refunded: "Payment was refunded on %{date}."
+         confirmation: "I confirm that I have followed the above steps and paid the registration fees."
+         payment_reference: "Payment Reference"
+         payment_info: "Payment Information"
+         submit: "Submit payment reference"
         psychsheets:
           show_me: "Show me"
           rank: "Rank: %{userPosition}"
@@ -2277,6 +2285,7 @@ en:
     payment_providers:
       paypal: 'PayPal'
       stripe: 'Stripe'
+      manual: 'Manual/External'
     #context: Setting up and making payments
     payment_setup:
       external_dashboard: '%{provider} Dashboard'
@@ -2290,13 +2299,16 @@ en:
       supported_currencies: "%{provider} Supported Currencies"
       provider_heading: "%{provider} Payments"
       accept_payments_header: "Accept Registration Payments"
-      connect_button: "Connect with %{provider}"
+      manual_payments_header: "Configure Manual Payments"
+      connect_button: "Set up %{provider}"
       connect_account_info:
         stripe: "In order to accept payments for this competition, you need to connect your own Stripe account with the WCA Stripe account by clicking the button below. If you don't already have your own Stripe account you can still click on the button below and it will guide you through the process."
         paypal: "A PayPal Business account is required to accept PayPal payments via the competition page. If you don't already have a PayPal business account, you can still click on the button below and it will guide you through the process."
+        manual: "Define payment instructions for competitors. Competitors will be able to indicate when they have paid, and provide a payment reference for you to check against your records in the external payment service you use."
       connect_account_warning:
         stripe: "Connecting your Stripe account gives the WCA website the ability to create charges, and issue refunds directly on your Stripe account."
         paypal: "Connecting your PayPal account gives the WCA website the ability to route payments to you, and issue refunds directly on your PayPal account."
+        manual:  ""
       currently_connected_info: "This competition is set up to accept payments through %{provider}. The Delegate(s) of the competition should contact WCAT to make any changes to connected accounts."
       before_disconnect_warning: "Disconnecting on this page will make our website forget the connection to your %{provider} account. But your %{provider} dashboard (see link below) may still list the WCA website based on the authorization that you previously granted. Note that revoking authorization in the %{provider} dashboard will also affect any other competition linked to accept payments through this account!"
       before_disconnect_info: "Keep in mind that disconnecting an account should only be done in exceptional situations, such as the current account being unable to receive payments."
@@ -2308,6 +2320,9 @@ en:
         paypal:
           display_name: "Name"
           primary_email: "Email"
+        manual:
+          payment_info: "Payment instructions (will be displayed on Competition Page)"
+          payment_reference: "What information should the user provide for you to identify their payment? (eg, payment reference number / account ID / etc)"
         fallback_not_applicable: "N/A"
   persons:
     #context: Person search page

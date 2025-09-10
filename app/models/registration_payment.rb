@@ -21,16 +21,24 @@ class RegistrationPayment < ApplicationRecord
            allow_nil: true,
            with_model_currency: :currency_code
 
-  private def becoming_completed?
-    is_completed && (will_save_change_to_is_completed? || new_record?)
+  def should_auto_close?
+    refunded_registration_payment_id.nil? && saved_change_to_is_completed?(to: true)
   end
 
-  private def set_paid_at
-    self.paid_at = current_time_from_proper_timezone
+  def create_uncaptured_payment
+    return unless self.is_completed?
+
+    RegistrationPayment.create(
+      amount_lowest_denomination: self.amount_lowest_denomination,
+      currency_code: self.currency_code,
+      user: self.user,
+      registration: self.registration,
+      is_completed: false,
+    )
   end
 
   def amount_available_for_refund
-    amount_lowest_denomination + refunding_registration_payments.sum(:amount_lowest_denomination)
+    amount_lowest_denomination + refunding_registration_payments.completed.sum(:amount_lowest_denomination)
   end
 
   private def auto_accept_hook
@@ -49,7 +57,9 @@ class RegistrationPayment < ApplicationRecord
     v2_json = {
       user_id: self.user_id,
       payment_id: self.receipt_id,
-      payment_provider: payment_provider,
+      completed: self.is_completed,
+      payment_provider: payment_provider.to_s,
+      payment_reference: self.receipt&.payment_reference,
       iso_amount_payment: self.amount_lowest_denomination.abs,
       currency_code: self.currency_code,
     }
