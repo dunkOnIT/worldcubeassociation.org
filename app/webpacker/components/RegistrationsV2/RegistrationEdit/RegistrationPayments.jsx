@@ -6,6 +6,7 @@ import {
 import _ from 'lodash';
 import getRegistrationPayments from '../api/payment/get/getRegistrationPayments';
 import refundPayment from '../api/payment/get/refundPayment';
+import { captureManualPayments, uncaptureManualPayments } from '../api/payment/patch/manualPayments';
 import Loading from '../../Requests/Loading';
 import AutonumericField from '../../wca/FormBuilder/input/AutonumericField';
 import I18n from '../../../lib/i18n';
@@ -18,7 +19,7 @@ import { useConfirm } from '../../../lib/providers/ConfirmProvider';
 
 export default function RegistrationPayments({
   registrationId,
-  competitionId,
+  competitionInfo,
 }) {
   const {
     data: payments,
@@ -56,8 +57,9 @@ export default function RegistrationPayments({
       <PaymentsMainBody
         registrationId={registrationId}
         payments={payments}
-        competitionId={competitionId}
+        competitionInfo={competitionInfo}
         userInfo={userInfo}
+        refetchPayments={refetchPayments}
       />
     </>
   );
@@ -66,8 +68,9 @@ export default function RegistrationPayments({
 function PaymentsMainBody({
   registrationId,
   payments,
-  competitionId,
+  competitionInfo,
   userInfo,
+  refetchPayments
 }) {
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
@@ -108,9 +111,77 @@ function PaymentsMainBody({
     },
   });
 
+  const { mutate: captureManualPaymentsMutation, isPending: isCapturing } = useMutation({
+    mutationFn: captureManualPayments,
+    onError: (data) => {
+      console.log(data)
+      dispatch(showMessage('competitions.registration_v2.payments.capture_manual_error', 'negative'));
+    },
+    onSuccess: () => {
+      dispatch(showMessage('competitions.registration_v2.payments.capture_manual_success', 'positive'));
+      refetchPayments()
+    }
+  });
+
+  const { mutate: uncaptureManualPaymentsMutation, isPending: isUncapturing } = useMutation({
+    mutationFn: uncaptureManualPayments,
+    onError: (data) => {
+      console.log(data)
+      dispatch(showMessage('competitions.registration_v2.payments.uncapture_manual_failure', 'negative'));
+    },
+    onSuccess: () => {
+      dispatch(showMessage('competitions.registration_v2.payments.uncapture_manual_success', 'positive'));
+      refetchPayments()
+    }
+  });
+
   if (payments.length === 0) {
     return <Message warning>{I18n.t('payments.messages.no_payments')}</Message>;
   }
+
+  if (competitionInfo.connected_payment_integration_types.includes('manual')) {
+    const paymentCompleted = payments[0].is_completed
+
+    return (
+      <>
+        <Table>
+          <Table.Header>
+            <Table.Row>
+              <Table.HeaderCell>{I18n.t('payments.labels.manual_reference')}</Table.HeaderCell>
+              <Table.HeaderCell>{I18n.t('payments.labels.manual_status')}</Table.HeaderCell>
+              <Table.HeaderCell />
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
+            <Table.Row>
+              <Table.Cell>{payments[0].payment_reference}</Table.Cell>
+              <Table.Cell>
+                {paymentCompleted
+                  ? I18n.t('competitions.registration_v2.payments.paid')
+                  : I18n.t('competitions.registration_v2.payments.unpaid')
+                }
+              </Table.Cell>
+              <Table.Cell>
+                <Button
+                  onClick={() =>
+                    paymentCompleted
+                    ? uncaptureManualPaymentsMutation(registrationId)
+                    : captureManualPaymentsMutation({ competitionId: competitionInfo.id, registrationIds: [registrationId] })
+                  }
+                  disabled={isCapturing || isUncapturing}
+                >
+                  {paymentCompleted
+                    ? I18n.t('competitions.registration_v2.payments.mark_unpaid')
+                    : I18n.t('competitions.registration_v2.payments.approve_payments')
+                  }
+                </Button>
+              </Table.Cell>
+            </Table.Row>
+          </Table.Body>
+        </Table>
+      </>
+    )
+  };
 
   return (
     <>
@@ -133,7 +204,7 @@ function PaymentsMainBody({
               payment={refund}
               refundMutation={refundMutation}
               isMutating={isMutating}
-              competitionId={competitionId}
+              competitionInfo={competitionInfo}
               key={refund.payment_id}
               userInfo={userInfo}
             />
@@ -141,11 +212,11 @@ function PaymentsMainBody({
         </Table.Body>
       </Table>
     </>
-  );
+  )
 }
 
 function PaymentRow({
-  payment, refundMutation, isMutating, competitionId, userInfo,
+  payment, refundMutation, isMutating, competitionInfo, userInfo,
 }) {
   const [amountToRefund, setAmountToRefund] = useInputState(payment.iso_amount_refundable);
 
@@ -155,7 +226,7 @@ function PaymentRow({
     content: I18n.t('registrations.refund_confirmation'),
   }).then(() => {
     refundMutation({
-      competitionId,
+      competitionId: competitionInfo.id,
       paymentId: payment.payment_id,
       paymentProvider: payment.payment_provider,
       amount: amountToRefund,

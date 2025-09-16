@@ -1,5 +1,5 @@
 import fetchWithJWTToken from '../../../../../lib/requests/fetchWithJWTToken';
-import { captureManualPaymentsUrl } from '../../../../../lib/requests/routes.js.erb';
+import { captureManualPaymentsUrl, uncaptureManualPaymentsUrl } from '../../../../../lib/requests/routes.js.erb';
 
 export async function captureManualPayments({competitionId, registrationIds}) {
   const route = captureManualPaymentsUrl(competitionId);
@@ -9,6 +9,17 @@ export async function captureManualPayments({competitionId, registrationIds}) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ registration_ids: registrationIds })
+  });
+  return data;
+}
+
+export async function uncaptureManualPayments(registrationId) {
+  const route = uncaptureManualPaymentsUrl(registrationId);
+  const { data } = await fetchWithJWTToken(route, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
   });
   return data;
 }

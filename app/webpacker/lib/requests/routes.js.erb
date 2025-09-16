@@ -108,6 +108,8 @@ export const paymentFinishUrl = (competitionId, paymentIntegration) => `<%= CGI.
 
 export const captureManualPaymentsUrl = (competitionId) => `<%= CGI.unescape(Rails.application.routes.url_helpers.capture_manual_payments_api_v1_competition_registrations_path("${competitionId}")) %>`
 
+export const uncaptureManualPaymentsUrl = (registrationId) => `<%= CGI.unescape(Rails.application.routes.url_helpers.uncapture_manual_payment_api_v1_registration_path("${registrationId}")) %>`
+
 export const registrationPaymentsUrl = (registrationId) => `<%= CGI.unescape(Rails.application.routes.url_helpers.api_v1_registration_payments_path("${registrationId}")) %>`
 
 export const registrationHistoryUrl = (registrationId) => `<%= CGI.unescape(Rails.application.routes.url_helpers.api_v1_registration_history_path("${registrationId}")) %>`;
