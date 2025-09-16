@@ -66,7 +66,7 @@ export default function RegistrationAdministrationTableFooter({
         {`${I18n.t('registrations.list.country_plural', { count: countryCount })}`}
       </Table.Cell>
       <Table.Cell key="registered on" />
-      {competitionInfo['using_payment_integrations?'] && (
+      {(competitionInfo['using_payment_integrations?'] && !competitionInfo['connected_payment_integration_types'].includes('manual')) && (
         <Table.Cell>{moneyCountHumanReadable(registrations, competitionInfo)}</Table.Cell>
       )}
       {eventsAreExpanded ? (

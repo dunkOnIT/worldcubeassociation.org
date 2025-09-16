@@ -1835,6 +1835,7 @@ en:
         nothing_captured: "No new payments were approved - it is likely that the selected payments were already marked as paid."
         capture_manual_success: "Registration payments successfully approved"
         approved_modal_header: "Approved payments for the following registrations"
+        approve_payments: "Approve Payment(s)"
       auto_accept:
         bulk_modal_header: "Bulk Auto-Accept Result"
         bulk_auto_accept: "Auto-Approve Competitors"

@@ -353,7 +353,7 @@ export default function RegistrationActions({
 
       {competitionInfo.connected_payment_integration_types.includes('manual') && (
         <Button
-          content={"Approve Payments"}
+          content={I18n.t('competitions.registration_v2.payments.approve_payments')}
           color="green"
           icon="money bill alternate"
           labelPosition="left"
