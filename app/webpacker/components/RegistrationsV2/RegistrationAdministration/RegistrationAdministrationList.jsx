@@ -29,6 +29,7 @@ import {
   REJECTED_COLOR, REJECTED_ICON,
   WAITLIST_COLOR, WAITLIST_ICON,
 } from '../../../lib/utils/registrationAdmin';
+import { captureManualPayments } from '../api/payment/patch/captureManualPayments';
 
 const expandableColumns = {
   dob: I18n.t('activerecord.attributes.user.dob'),
@@ -93,8 +94,22 @@ export default function RegistrationAdministrationList({ competitionInfo }) {
     },
   });
 
+
+  const findNameOfRegistrant = (registrationId) => {
+    return registrations.find(
+      (registration) => registration.id === Number(registrationId),
+    )?.user.name
+  }
+
+  const [modalHeader, setModalHeader] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalData, setModalData] = useState(null);
+
+  const showModal = (header, data) => {
+    setModalHeader(header)
+    setModalData(data)
+    setModalOpen(true)
+  }
 
   const { mutate: bulkAutoAcceptMutation, isPending: isAutoAccepting } = useMutation({
     mutationFn: bulkAutoAccept,
@@ -108,8 +123,10 @@ export default function RegistrationAdministrationList({ competitionInfo }) {
       if (Object.keys(data).length === 0) {
         dispatchStore(showMessage('competitions.registration_v2.auto_accept.nothing_to_accept', 'info'));
       } else {
-        setModalData(data);
-        setModalOpen(true);
+        const formattedData = Object.entries(data).map( ([key, value]) =>
+          findNameOfRegistrant(key) + ' - Succeeded: ' + value.succeeded.toString() + ', Info: ' + value.info
+        )
+        showModal(I18n.t('competitions.registration_v2.auto_accept.bulk_modal_header'), formattedData)
         dispatchStore(showMessage('competitions.registration_v2.auto_accept.bulk_auto_accepted', 'positive'));
       }
       return refetch();
@@ -136,6 +153,23 @@ export default function RegistrationAdministrationList({ competitionInfo }) {
       // via graphql/websockets, but we aren't there yet
       await refetch();
     },
+  });
+
+  const { mutate: captureManualPaymentsMutation, isPending: isCapturing } = useMutation({
+    mutationFn: captureManualPayments,
+    onError: () => {
+      dispatchStore(showMessage('competitions.registration_v2.payments.capture_manual_error', 'negative'));
+    },
+    onSuccess: (data) => {
+      if (Object.keys(data).length === 0) {
+        dispatchStore(showMessage('competitions.registration_v2.payments.nothing_captured', 'info'));
+      } else {
+        const formattedData = Object.keys(data).map( (registrationId) => findNameOfRegistrant(registrationId) )
+        showModal(I18n.t('competitions.registration_v2.payments.approved_modal_header'), formattedData)
+        dispatchStore(showMessage('competitions.registration_v2.payments.capture_manual_success', 'positive'));
+      }
+      return refetch()
+    }
   });
 
   const partitionedRegistrations = useMemo(
@@ -425,7 +459,7 @@ export default function RegistrationAdministrationList({ competitionInfo }) {
   );
 
   return (
-    <Segment loading={isMutating || isAutoAccepting}>
+    <Segment loading={isMutating || isAutoAccepting || isCapturing}>
       {competitionInfo.auto_accept_preference === autoAcceptPreferences.bulk && (
         <>
           <Button
@@ -443,32 +477,22 @@ export default function RegistrationAdministrationList({ competitionInfo }) {
             onClose={() => setModalOpen(false)}
             size="small"
           >
-            <Modal.Header>Bulk Auto-Accept Result</Modal.Header>
+            <Modal.Header>{modalHeader}</Modal.Header>
             <Modal.Content>
-              {modalData !== null ? (
-                <List bulleted>
-                  {Object.entries(modalData).map(([key, value]) => (
-                    <List.Item key={key}>
-                      {registrations.find(
-                        (registration) => registration.id === Number(key),
-                      )?.user.name}
-                      {' - '}
-                      <b>Succeeded</b>
-                      {': '}
-                      {value.succeeded.toString()}
-                      {', '}
-                      <b>Info</b>
-                      {': '}
-                      {value.info}
-                    </List.Item>
-                  ))}
-                </List>
-              ) : (
-                <p>No data available.</p>
-              )}
+              <List bulleted>
+                {modalData?.map((item, i) => (
+                  <List.Item key={i}>{item}</List.Item>
+                ))}
+              </List>
             </Modal.Content>
             <Modal.Actions>
-              <Button onClick={() => setModalOpen(false)}>Close</Button>
+              <Button
+                onClick={() => {
+                  setModalOpen(false)
+                  setModalData(null)
+                  setModalHeader(null)
+                }}
+              >{I18n.t('misc.close')}</Button>
             </Modal.Actions>
           </Modal>
         </>
@@ -508,6 +532,7 @@ export default function RegistrationAdministrationList({ competitionInfo }) {
             spotsRemaining={spotsRemaining}
             competitionInfo={competitionInfo}
             updateRegistrationMutation={updateRegistrationMutation}
+            captureManualPaymentsMutation={captureManualPaymentsMutation}
           />
         </Sticky>
 
