@@ -6,7 +6,7 @@ import {
 import _ from 'lodash';
 import getRegistrationPayments from '../api/payment/get/getRegistrationPayments';
 import refundPayment from '../api/payment/get/refundPayment';
-import { captureManualPayments } from '../api/payment/patch/captureManualPayments';
+import { captureManualPayments, uncaptureManualPayments } from '../api/payment/patch/manualPayments';
 import Loading from '../../Requests/Loading';
 import AutonumericField from '../../wca/FormBuilder/input/AutonumericField';
 import I18n from '../../../lib/i18n';
@@ -59,6 +59,7 @@ export default function RegistrationPayments({
         payments={payments}
         competitionInfo={competitionInfo}
         userInfo={userInfo}
+        refetchPayments={refetchPayments}
       />
     </>
   );
@@ -69,6 +70,7 @@ function PaymentsMainBody({
   payments,
   competitionInfo,
   userInfo,
+  refetchPayments
 }) {
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
@@ -111,11 +113,25 @@ function PaymentsMainBody({
 
   const { mutate: captureManualPaymentsMutation, isPending: isCapturing } = useMutation({
     mutationFn: captureManualPayments,
-    onError: () => {
-      dispatch(showMessage('An error occurred while trying to capture manual payments', 'negative'));
+    onError: (data) => {
+      console.log(data)
+      dispatch(showMessage('competitions.registration_v2.payments.capture_manual_error', 'negative'));
     },
     onSuccess: () => {
-      dispatch(showMessage('Registration payments successfully approved', 'positive'));
+      dispatch(showMessage('competitions.registration_v2.payments.capture_manual_success', 'positive'));
+      refetchPayments()
+    }
+  });
+
+  const { mutate: uncaptureManualPaymentsMutation, isPending: isUncapturing } = useMutation({
+    mutationFn: uncaptureManualPayments,
+    onError: (data) => {
+      console.log(data)
+      dispatch(showMessage('competitions.registration_v2.payments.uncapture_manual_failure', 'negative'));
+    },
+    onSuccess: () => {
+      dispatch(showMessage('competitions.registration_v2.payments.uncapture_manual_success', 'positive'));
+      refetchPayments()
     }
   });
 
@@ -124,6 +140,8 @@ function PaymentsMainBody({
   }
 
   if (competitionInfo.connected_payment_integration_types.includes('manual')) {
+    const paymentCompleted = payments[0].is_completed
+
     return (
       <>
         <Table>
@@ -136,15 +154,26 @@ function PaymentsMainBody({
           </Table.Header>
           <Table.Body>
             <Table.Row>
-              {console.log(payments[0])}
               <Table.Cell>{payments[0].payment_reference}</Table.Cell>
-              <Table.Cell>{payments[0].is_completed ? 'Paid' : 'Not Paid'}</Table.Cell>
+              <Table.Cell>
+                {paymentCompleted
+                  ? I18n.t('competitions.registration_v2.payments.paid')
+                  : I18n.t('competitions.registration_v2.payments.unpaid')
+                }
+              </Table.Cell>
               <Table.Cell>
                 <Button
-                  onClick={() => captureManualPaymentsMutation({ competitionId: competitionInfo.id, registrationIds: [registrationId] })}
-                  disabled={isCapturing}
+                  onClick={() =>
+                    paymentCompleted
+                    ? uncaptureManualPaymentsMutation(registrationId)
+                    : captureManualPaymentsMutation({ competitionId: competitionInfo.id, registrationIds: [registrationId] })
+                  }
+                  disabled={isCapturing || isUncapturing}
                 >
-                  {payments[0].is_completed ? 'Mark Unpaid' : 'Approve Payment'}
+                  {paymentCompleted
+                    ? I18n.t('competitions.registration_v2.payments.mark_unpaid')
+                    : I18n.t('competitions.registration_v2.payments.approve_payments')
+                  }
                 </Button>
               </Table.Cell>
             </Table.Row>

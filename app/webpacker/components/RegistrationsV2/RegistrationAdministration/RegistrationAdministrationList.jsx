@@ -29,7 +29,7 @@ import {
   REJECTED_COLOR, REJECTED_ICON,
   WAITLIST_COLOR, WAITLIST_ICON,
 } from '../../../lib/utils/registrationAdmin';
-import { captureManualPayments } from '../api/payment/patch/captureManualPayments';
+import { captureManualPayments } from '../api/payment/patch/manualPayments';
 
 const expandableColumns = {
   dob: I18n.t('activerecord.attributes.user.dob'),

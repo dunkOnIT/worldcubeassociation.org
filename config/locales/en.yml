@@ -1833,9 +1833,14 @@ en:
       payments:
         capture_manual_error: "An error occurred while trying to capture manual payments. If this issue persists contact WST"
         nothing_captured: "No new payments were approved - it is likely that the selected payments were already marked as paid."
-        capture_manual_success: "Registration payments successfully approved"
+        capture_manual_success: "Registration payment(s) successfully approved"
         approved_modal_header: "Approved payments for the following registrations"
+        uncapture_manual_failure: "An error occurred while trying to mark manual payment as unpaid"
+        uncapture_manual_success: "Registration payment marked as unpaid "
+        mark_unpaid: "Mark Unpaid"
         approve_payments: "Approve Payment(s)"
+        paid: "Paid"
+        unpaid: "Not Paid"
       auto_accept:
         bulk_modal_header: "Bulk Auto-Accept Result"
         bulk_auto_accept: "Auto-Approve Competitors"
@@ -2277,6 +2282,7 @@ en:
       charge_refunded: "Payment was refunded"
       charges_refunded: "All charges have been refunded"
       no_payments: "No payments have been made for this registration."
+
     errors:
       refund:
         provider_disconnected: "You cannot issue a refund for this competition anymore. Please use your payment provider's dashboard to do so."
