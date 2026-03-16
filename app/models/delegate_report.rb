@@ -73,7 +73,10 @@ class DelegateReport < ApplicationRecord
   validates :wrc_incidents, presence: true, if: :wrc_feedback_requested
   validates :wic_incidents, presence: true, if: :wic_feedback_requested
 
-  validates :setup_images, blob: { content_type: :web_image },
+  validates :setup_images, blob: {
+                             content_type: :web_image,
+                             size_range: 0..(10.megabytes)
+                           },
                            length: { minimum: :required_setup_images_count, if: %i[posted? requires_setup_images?] }
 
   def schedule_and_discussion_urls_required?
