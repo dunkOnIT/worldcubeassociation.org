@@ -73,7 +73,7 @@ namespace :h2h_results do
   desc "Graduate H2H data from live tables to results and result_attempts"
   task :post, [:competition_id] => :environment do |_t, args|
     competition = Competition.find(args[:competition_id])
-    h2h_rounds = competition.rounds.where(is_h2h_mock: true)
+    h2h_rounds = competition.rounds.where(format_id: "h")
 
     puts "Posting H2H results for #{competition.id}"
 
@@ -146,7 +146,7 @@ namespace :h2h_results do
   desc 'Remove all data related to a given competition with h2h rounds'
   task :destroy, [:competition_id] => :environment do |_t, args|
     competition = Competition.find(args[:competition_id])
-    h2h_rounds = competition.rounds.where(is_h2h_mock: true)
+    h2h_rounds = competition.rounds.where(format_id: "h")
     puts "Removing H2H results for #{competition.id}"
 
     ActiveRecord::Base.transaction do

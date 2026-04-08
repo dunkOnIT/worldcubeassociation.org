@@ -24,6 +24,7 @@ function RoundResultsTable({
   return (
     <>
       <h2>{localizeRoundInformation(eventId, round.roundTypeId)}</h2>
+      {console.log(round)}
       {round.isH2hMock && <p><i>{I18n.t('competitions.results_table.h2h_results_disclaimer')}</i></p>}
       {adminMode && (
         <Button positive as="a" href={newEntryUrlFn(competitionId, round.id)} size="tiny">

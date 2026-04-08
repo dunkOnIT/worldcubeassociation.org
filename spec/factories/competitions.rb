@@ -444,7 +444,6 @@ FactoryBot.define do
                 number: i + 1,
                 total_number_of_rounds: evaluator.rounds_per_event,
                 scramble_set_count: evaluator.groups_per_round,
-                is_h2h_mock: true,
               )
             else
               ce.rounds.create!(
