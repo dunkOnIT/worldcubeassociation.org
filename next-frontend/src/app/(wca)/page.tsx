@@ -233,8 +233,8 @@ const ImageOnlyCardImage = ({ block }: { block: ImageOnlyCardBlock }) => {
     <MediaImage
       media={block.mainImage as Media}
       altFallback={block.heading}
-      aspectRatio="2/1"
-      maxHeight="10rem" // somewhat arbitrary, if you have a better idea please shout!
+      aspectRatio={{ base: "1", xl: "1.5/1", "2xl": "2/1" }}
+      maxHeight="15rem"
     />
   );
 };
@@ -249,8 +249,9 @@ const ImageOnlyCard = ({ block }: { block: ImageOnlyCardBlock }) => {
     >
       {block.textPosition === "bottom" && <ImageOnlyCardImage block={block} />}
       {block.heading && (
-        <Card.Body>
-          <Card.Title textStyle="h2">{block.heading}</Card.Title>
+        <Card.Body
+        >
+          <Card.Title textStyle="h3">{block.heading}</Card.Title>
         </Card.Body>
       )}
       {block.textPosition === "top" && <ImageOnlyCardImage block={block} />}
