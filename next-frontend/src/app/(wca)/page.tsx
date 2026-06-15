@@ -14,6 +14,8 @@ import {
   Text,
   VStack,
   Link as ChakraLink,
+  LinkBox,
+  LinkOverlay,
   Center,
   HStack,
   AbsoluteCenter,
@@ -93,14 +95,9 @@ const TextCard = ({ block }: { block: TextCardBlock }) => {
               <Button
                 key={button.id}
                 asChild
-                colorPalette={button.inheritColorScheme ? undefined : "blue"}
-                variant={button.inheritColorScheme ? "outline" : "solid"}
-                bg={button.inheritColorScheme ? undefined : "colorPalette.1A"}
-                _hover={{
-                  bg: button.inheritColorScheme
-                    ? "colorPalette.emphasized"
-                    : undefined,
-                }}
+                variant={
+                  button.inheritColorScheme ? "pastelOutline" : "pastelSolid"
+                }
               >
                 <ChakraLink
                   color="colorPalette.pastelContrast"
@@ -240,22 +237,28 @@ const ImageOnlyCardImage = ({ block }: { block: ImageOnlyCardBlock }) => {
 };
 
 const ImageOnlyCard = ({ block }: { block: ImageOnlyCardBlock }) => {
+  // Payload types an optional parameter as undefined or null, but Chakra only wants undefined
+  const href = block.url ?? undefined;
   return (
-    <Card.Root
-      overflow="hidden"
-      colorPalette={block.colorPalette}
-      colorVariant="slatePastel"
-      width="full"
-    >
-      {block.textPosition === "bottom" && <ImageOnlyCardImage block={block} />}
-      {block.heading && (
-        <Card.Body
-        >
-          <Card.Title textStyle="h3">{block.heading}</Card.Title>
-        </Card.Body>
-      )}
-      {block.textPosition === "top" && <ImageOnlyCardImage block={block} />}
-    </Card.Root>
+    <LinkBox asChild>
+      <Card.Root
+        overflow="hidden"
+        colorPalette={block.colorPalette}
+        colorVariant="slatePastel"
+        width="full"
+      >
+        <LinkOverlay href={href} />
+        {block.textPosition === "bottom" && (
+          <ImageOnlyCardImage block={block} />
+        )}
+        {block.heading && (
+          <Card.Body>
+            <Card.Title textStyle="h2">{block.heading}</Card.Title>
+          </Card.Body>
+        )}
+        {block.textPosition === "top" && <ImageOnlyCardImage block={block} />}
+      </Card.Root>
+    </LinkBox>
   );
 };
 
@@ -303,7 +306,7 @@ const FeaturedCompetitions = async ({
           <Text textStyle={{ base: "h2", md: "h1" }}>
             Upcoming Competitions
           </Text>
-          <Button asChild variant="outline">
+          <Button asChild variant="pastelSolid">
             <Link href="/competitions">View all Competitions</Link>
           </Button>
         </HStack>
